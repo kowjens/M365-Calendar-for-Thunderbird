@@ -1,0 +1,13 @@
+"use strict";
+const assert=require("assert"),fs=require("fs"),path=require("path");
+const root=path.resolve(__dirname,"..");
+const m=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"),"utf8"));
+assert.strictEqual(m.version,"2.0.19");
+assert.ok(!m.experiment_apis,"STANDARD must not contain experiment_apis");
+assert.ok(!fs.existsSync(path.join(root,"experiments")),"STANDARD must not contain Experiment source");
+const cfg=fs.readFileSync(path.join(root,"config/build-config.js"),"utf8");
+assert.ok(cfg.includes("nativeMode: false"));
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+assert.ok(bg.includes("const NATIVE_PACKAGE = BUILD_DEFAULTS.nativeMode !== false"));
+assert.ok(bg.includes("if (!NATIVE_PACKAGE) return null;"),"STANDARD probe must exit before browser.nativeCalendar access");
+console.log("test_standard.js: OK");

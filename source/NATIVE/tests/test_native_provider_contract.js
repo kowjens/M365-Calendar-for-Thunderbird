@@ -1,0 +1,31 @@
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+const root = path.resolve(__dirname, "..");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+const api = fs.readFileSync(path.join(root, "experiments", "nativeCalendar", "api.js"), "utf8");
+assert.strictEqual(manifest.version, "2.0.19");
+assert.ok(manifest.experiment_apis?.nativeCalendar);
+assert.ok(!fs.existsSync(path.join(root, "experiments", "nativeCalendar", "provider.sys.mjs")), "external provider module must remain removed in V2.18");
+assert.ok(api.includes("function _m365NativeCreateProviderRuntime()"));
+assert.ok(api.includes('ChromeUtils.importESModule("resource:///modules/calendar/calUtils.sys.mjs")'));
+assert.ok(api.includes('ChromeUtils.importESModule("resource:///modules/CalEvent.sys.mjs")'));
+assert.ok(api.includes('ChromeUtils.importESModule("resource:///modules/CalAttendee.sys.mjs")'));
+assert.ok(api.includes('ChromeUtils.importESModule("resource:///modules/CalAlarm.sys.mjs")'));
+assert.ok(api.includes("new CalEvent()"));
+assert.ok(api.includes("new CalAttendee()"));
+assert.ok(api.includes("new CalAlarm()"));
+assert.ok(!api.includes("cal.createEvent()"));
+assert.ok(!api.includes("cal.createAttendee()"));
+assert.ok(!api.includes("cal.createAlarm()"));
+assert.ok(api.includes("class M365Calendar extends cal.provider.BaseClass"));
+assert.ok(api.includes("cal.manager.registerCalendarProvider"));
+assert.ok(api.includes("cal.provider.register"));
+assert.ok(!api.includes('setSubstitution("m365calendar-native"'));
+assert.ok(!api.includes("resource://m365calendar-native/provider.sys.mjs"));
+
+
+assert.ok(api.includes("async function reloadViews(extension, reason"));
+assert.ok(api.includes("ensureVisibilityReloadObserver(extension)"));
+assert.ok(api.includes("removeVisibilityReloadObserver()"));
+console.log("native provider contract V2.18: OK");

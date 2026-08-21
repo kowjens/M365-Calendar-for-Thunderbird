@@ -1,0 +1,200 @@
+[
+  {
+    "namespace": "nativeCalendar",
+    "functions": [
+      {
+        "name": "ping",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "boolean"
+        }
+      },
+      {
+        "name": "ensureCalendars",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "calendars",
+            "type": "array",
+            "items": {
+              "type": "any"
+            }
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "removeAll",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "boolean"
+        }
+      },
+      {
+        "name": "synchronize",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "replaceCalendarEvents",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "graphCalendarId",
+            "type": "string"
+          },
+          {
+            "name": "events",
+            "type": "array",
+            "items": {
+              "type": "any"
+            }
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "reloadViews",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "reason",
+            "type": "string",
+            "optional": true
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "status",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "diagnostics",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      }
+    ],
+    "events": [
+      {
+        "name": "onSync",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "calendar",
+            "type": "any"
+          }
+        ]
+      },
+      {
+        "name": "onItemCreated",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "calendar",
+            "type": "any"
+          },
+          {
+            "name": "item",
+            "type": "any"
+          },
+          {
+            "name": "options",
+            "type": "any",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "onItemUpdated",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "calendar",
+            "type": "any"
+          },
+          {
+            "name": "item",
+            "type": "any"
+          },
+          {
+            "name": "oldItem",
+            "type": "any"
+          },
+          {
+            "name": "options",
+            "type": "any",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "onItemRemoved",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "calendar",
+            "type": "any"
+          },
+          {
+            "name": "item",
+            "type": "any"
+          },
+          {
+            "name": "options",
+            "type": "any",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "onTeamsMeetingRequested",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "details",
+            "type": "any",
+            "optional": true
+          }
+        ]
+      },
+      {
+        "name": "onEventEditRequested",
+        "type": "function",
+        "parameters": [
+          {
+            "name": "details",
+            "type": "any",
+            "optional": true
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,18 @@
+"use strict";
+const fs=require("fs"), path=require("path"), assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments","nativeCalendar","api.js"),"utf8");
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+const schema=JSON.parse(fs.readFileSync(path.join(root,"experiments","nativeCalendar","schema.json"),"utf8"));
+assert.ok(api.includes("async function replaceCalendarEvents(extension, graphCalendarId, events)"), "direct cache push runtime missing");
+assert.ok(api.includes("async function reconcileOfflineStorage(offlineStorage, events, calendar)"), "cache reconciliation helper missing");
+assert.ok(api.includes("await offlineStorage.deleteItem(item)"), "reconciliation must emit delete operations");
+assert.ok(api.includes("await offlineStorage.modifyItem(newItem, oldItem)"), "reconciliation must emit modify operations");
+assert.ok(api.includes("await offlineStorage.adoptItem(newItem)"), "reconciliation must emit add operations");
+assert.ok(!api.includes("stage(`clearNativeCache:"), "direct push must not bulk-clear cache before refilling");
+assert.ok(api.includes("cacheUnchanged"), "unchanged cache counter missing");
+assert.ok(api.includes("countOfflineEvents(offlineStorage)"), "cache item verification missing");
+assert.ok(api.includes("async replayChangesOn(listener)"), "calIChangeLog fallback must remain implemented");
+assert.ok(schema[0].functions.some(f=>f.name==="replaceCalendarEvents"), "Experiment schema direct push method missing");
+assert.ok(bg.includes("await api.replaceCalendarEvents(graphCalendarId, nativeEvents)"), "background must use direct cache push");
+console.log("native cache reconciliation contract V2.18: OK");

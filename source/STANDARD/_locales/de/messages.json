@@ -1,0 +1,1029 @@
+{
+  "extName": {
+    "message": "M365 Calendar for Thunderbird"
+  },
+  "extDescription": {
+    "message": "Microsoft-365-/Teams-Kalenderintegration für Thunderbird mit nativer Kalenderansicht, Microsoft Graph, OAuth2/PKCE und Offline-Cache."
+  },
+  "spaceTitle": {
+    "message": "Microsoft 365"
+  },
+  "pageTitle": {
+    "message": "Microsoft 365 Kalender"
+  },
+  "subtitle": {
+    "message": "Kalender & Teams-Meetings"
+  },
+  "notSignedIn": {
+    "message": "Nicht angemeldet"
+  },
+  "connected": {
+    "message": "Microsoft 365 verbunden"
+  },
+  "settings": {
+    "message": "Einstellungen"
+  },
+  "close": {
+    "message": "Schließen"
+  },
+  "welcomeTitle": {
+    "message": "Microsoft 365 Kalender verbinden"
+  },
+  "welcomeInitial": {
+    "message": "Für die erste Verwendung müssen die Entra-App-Daten hinterlegt und die Microsoft-Anmeldung durchgeführt werden."
+  },
+  "welcomeNeedsConfig": {
+    "message": "Zuerst Application (Client) ID und Tenant eintragen. Danach kann die Microsoft-Anmeldung gestartet werden."
+  },
+  "welcomeReady": {
+    "message": "Microsoft 365 ist vorkonfiguriert. Jetzt mit dem Microsoft-365-Konto anmelden."
+  },
+  "openSettings": {
+    "message": "Einstellungen öffnen"
+  },
+  "signInMicrosoft": {
+    "message": "Mit Microsoft anmelden"
+  },
+  "previousMonth": {
+    "message": "Vorheriger Monat"
+  },
+  "nextMonth": {
+    "message": "Nächster Monat"
+  },
+  "today": {
+    "message": "Heute"
+  },
+  "calendar": {
+    "message": "Kalender"
+  },
+  "refresh": {
+    "message": "Aktualisieren"
+  },
+  "newEvent": {
+    "message": "+ Neuer Termin"
+  },
+  "weekdayMon": {
+    "message": "Mo"
+  },
+  "weekdayTue": {
+    "message": "Di"
+  },
+  "weekdayWed": {
+    "message": "Mi"
+  },
+  "weekdayThu": {
+    "message": "Do"
+  },
+  "weekdayFri": {
+    "message": "Fr"
+  },
+  "weekdaySat": {
+    "message": "Sa"
+  },
+  "weekdaySun": {
+    "message": "So"
+  },
+  "events": {
+    "message": "Termine"
+  },
+  "settingsSubtitle": {
+    "message": "Microsoft Entra / Graph"
+  },
+  "clientId": {
+    "message": "Application (Client) ID"
+  },
+  "tenant": {
+    "message": "Tenant"
+  },
+  "tenantHelp": {
+    "message": "Tenant-ID oder onmicrosoft.com-Domain."
+  },
+  "timeZone": {
+    "message": "Exchange-Zeitzone"
+  },
+  "redirectUri": {
+    "message": "OAuth Redirect URI"
+  },
+  "copy": {
+    "message": "Kopieren"
+  },
+  "redirectHelp": {
+    "message": "Diese URL in Entra als Redirect URI vom Typ Single-page application (SPA) eintragen."
+  },
+  "requiredPermissions": {
+    "message": "Benötigte delegierte Graph-Rechte"
+  },
+  "permissionsList": {
+    "message": "User.Read, Calendars.ReadWrite, Calendars.ReadWrite.Shared"
+  },
+  "buildInfoInternal": {
+    "message": "Build: intern vorkonfiguriert · Version $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
+  },
+  "buildInfoGithub": {
+    "message": "Build: neutral / GitHub · Version $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
+  },
+  "signOut": {
+    "message": "Abmelden"
+  },
+  "microsoftLogin": {
+    "message": "Microsoft Login"
+  },
+  "save": {
+    "message": "Speichern"
+  },
+  "event": {
+    "message": "Termin"
+  },
+  "time": {
+    "message": "Zeit"
+  },
+  "location": {
+    "message": "Ort"
+  },
+  "organizer": {
+    "message": "Organisator"
+  },
+  "status": {
+    "message": "Status"
+  },
+  "optionalReply": {
+    "message": "Optionale Antwort an den Organisator"
+  },
+  "commentPlaceholder": {
+    "message": "Kommentar …"
+  },
+  "sendReply": {
+    "message": "Antwort an Organisator senden"
+  },
+  "decline": {
+    "message": "Ablehnen"
+  },
+  "tentative": {
+    "message": "Vorbehalt"
+  },
+  "accept": {
+    "message": "Annehmen"
+  },
+  "newEventTitle": {
+    "message": "Neuer Termin"
+  },
+  "newEventSubtitle": {
+    "message": "Direkt im Microsoft-365-Kalender erstellen"
+  },
+  "subject": {
+    "message": "Betreff"
+  },
+  "start": {
+    "message": "Beginn"
+  },
+  "end": {
+    "message": "Ende"
+  },
+  "attendees": {
+    "message": "Teilnehmer"
+  },
+  "attendeesPlaceholder": {
+    "message": "max@example.com; anna@example.com"
+  },
+  "attendeesHelp": {
+    "message": "Mehrere Adressen mit Semikolon oder Komma trennen."
+  },
+  "description": {
+    "message": "Beschreibung"
+  },
+  "createTeamsMeeting": {
+    "message": "Als Microsoft Teams-Besprechung anlegen"
+  },
+  "cancel": {
+    "message": "Abbrechen"
+  },
+  "createEvent": {
+    "message": "Termin erstellen"
+  },
+  "syncing": {
+    "message": "Synchronisiere …"
+  },
+  "unknownAddonError": {
+    "message": "Unbekannter Add-on-Fehler."
+  },
+  "responseOrganizer": {
+    "message": "Organisator"
+  },
+  "responseAccepted": {
+    "message": "Angenommen"
+  },
+  "responseTentative": {
+    "message": "Mit Vorbehalt"
+  },
+  "responseDeclined": {
+    "message": "Abgelehnt"
+  },
+  "responseNone": {
+    "message": "Keine Antwort"
+  },
+  "responseNotResponded": {
+    "message": "Noch nicht beantwortet"
+  },
+  "unknown": {
+    "message": "Unbekannt"
+  },
+  "allDay": {
+    "message": "Ganztägig"
+  },
+  "noCalendars": {
+    "message": "Microsoft Graph liefert für dieses Konto keine Kalender."
+  },
+  "calendarFallback": {
+    "message": "Kalender"
+  },
+  "lastUpdated": {
+    "message": "Zuletzt aktualisiert $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "noSubject": {
+    "message": "(ohne Betreff)"
+  },
+  "moreEvents": {
+    "message": "+ $COUNT$ weitere",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "noEventsMonth": {
+    "message": "Keine Termine in diesem Monat."
+  },
+  "dayShort": {
+    "message": "Tag"
+  },
+  "cancelled": {
+    "message": "Abgesagt"
+  },
+  "teamsMeeting": {
+    "message": "Microsoft Teams / Onlinebesprechung"
+  },
+  "calendarEvent": {
+    "message": "Kalendertermin"
+  },
+  "noneDash": {
+    "message": "—"
+  },
+  "noDescription": {
+    "message": "Keine Beschreibung."
+  },
+  "joinTeams": {
+    "message": "Teams beitreten"
+  },
+  "openOutlook": {
+    "message": "In Outlook öffnen"
+  },
+  "toastAccepted": {
+    "message": "Termin angenommen."
+  },
+  "toastDeclined": {
+    "message": "Termin abgelehnt."
+  },
+  "toastTentative": {
+    "message": "Termin mit Vorbehalt angenommen."
+  },
+  "signedInAs": {
+    "message": "Angemeldet als $USER$",
+    "placeholders": {
+      "user": {
+        "content": "$1"
+      }
+    }
+  },
+  "signedIn": {
+    "message": "Angemeldet"
+  },
+  "notSignedInMicrosoft": {
+    "message": "Nicht bei Microsoft angemeldet"
+  },
+  "configChangedRelogin": {
+    "message": "Client/Tenant geändert. Bitte neu bei Microsoft anmelden."
+  },
+  "settingsSaved": {
+    "message": "Einstellungen gespeichert."
+  },
+  "enterConfigFirst": {
+    "message": "Bitte zuerst Client ID und Tenant eintragen."
+  },
+  "loginSuccess": {
+    "message": "Microsoft-Anmeldung erfolgreich$NAME$.",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "logoutSuccess": {
+    "message": "Microsoft-Anmeldung entfernt."
+  },
+  "calendarInfo": {
+    "message": "Kalender: $NAME$",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "teamsCreated": {
+    "message": "Teams-Termin wurde erstellt."
+  },
+  "eventCreated": {
+    "message": "Termin wurde erstellt."
+  },
+  "redirectCopied": {
+    "message": "Redirect URI kopiert."
+  },
+  "errorClientIdMissing": {
+    "message": "Bitte zuerst die Entra Application (Client) ID in den Einstellungen eintragen."
+  },
+  "errorTenantMissing": {
+    "message": "Bitte zuerst den Microsoft-Entra-Tenant in den Einstellungen eintragen."
+  },
+  "errorLoginCancelled": {
+    "message": "Microsoft-Anmeldung wurde abgebrochen."
+  },
+  "errorStateMismatch": {
+    "message": "OAuth state mismatch. Anmeldung aus Sicherheitsgründen abgebrochen."
+  },
+  "errorNoAuthCode": {
+    "message": "Microsoft hat keinen Authorization Code zurückgegeben."
+  },
+  "errorNoValidLogin": {
+    "message": "Keine gültige Microsoft-Anmeldung vorhanden."
+  },
+  "errorClientIdShort": {
+    "message": "Client ID fehlt."
+  },
+  "errorTenantShort": {
+    "message": "Tenant fehlt."
+  },
+  "errorLoginExpired": {
+    "message": "Microsoft-Anmeldung ist abgelaufen: $DETAIL$",
+    "placeholders": {
+      "detail": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorNotSignedIn": {
+    "message": "Nicht mit Microsoft angemeldet."
+  },
+  "errorNoCalendarSelected": {
+    "message": "Kein Kalender ausgewählt."
+  },
+  "errorInvalidResponse": {
+    "message": "Ungültige Terminantwort."
+  },
+  "errorEventIdMissing": {
+    "message": "Event-ID fehlt."
+  },
+  "errorSubjectMissing": {
+    "message": "Betreff fehlt."
+  },
+  "errorStartEndRequired": {
+    "message": "Start- und Endzeit sind erforderlich."
+  },
+  "errorEndAfterStart": {
+    "message": "Die Endzeit muss nach der Startzeit liegen."
+  },
+  "errorUnknownAction": {
+    "message": "Unbekannte Add-on-Aktion."
+  },
+  "inviteActionTitle": {
+    "message": "Microsoft-365-Einladung prüfen"
+  },
+  "inviteActionLabel": {
+    "message": "M365 Einladung"
+  },
+  "invitePopupTitle": {
+    "message": "M365 Einladung"
+  },
+  "inviteLoading": {
+    "message": "Einladung wird geprüft …"
+  },
+  "inviteNotInvitationTitle": {
+    "message": "Keine Kalendereinladung"
+  },
+  "inviteNotInvitationText": {
+    "message": "In der aktuell angezeigten Nachricht wurde keine iCalendar-Einladung gefunden."
+  },
+  "inviteNotInvitationShort": {
+    "message": "Keine Einladung erkannt"
+  },
+  "inviteMethodRequest": {
+    "message": "Besprechungsanfrage"
+  },
+  "inviteMethodCancel": {
+    "message": "Absage / Stornierung"
+  },
+  "inviteMethodReply": {
+    "message": "Antwort"
+  },
+  "inviteMethodPublish": {
+    "message": "Kalendereintrag"
+  },
+  "inviteStatusUnknown": {
+    "message": "Online-Status nicht verfügbar"
+  },
+  "inviteNeedsLogin": {
+    "message": "Die Einladung wurde erkannt. Für den Abgleich mit Exchange Online zuerst im Microsoft-365-Space anmelden."
+  },
+  "inviteDetected": {
+    "message": "Einladung erkannt"
+  },
+  "inviteMatchedOnline": {
+    "message": "Passender Termin in Exchange Online gefunden. Antworten werden direkt auf diesem Microsoft-365-Termin ausgeführt."
+  },
+  "inviteMatchedShort": {
+    "message": "Mit Exchange Online verknüpft"
+  },
+  "inviteLookupError": {
+    "message": "Die Einladung wurde erkannt, aber der Online-Abgleich ist fehlgeschlagen: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "inviteNoOnlineMatch": {
+    "message": "Die Einladung wurde erkannt, aber es konnte kein eindeutig passender Termin im Microsoft-365-Standardkalender gefunden werden."
+  },
+  "inviteOpenM365": {
+    "message": "Microsoft 365 öffnen"
+  },
+  "inviteErrorTitle": {
+    "message": "Einladung konnte nicht verarbeitet werden"
+  },
+  "inviteErrorShort": {
+    "message": "Fehler bei der Einladungsprüfung"
+  },
+  "inviteErrorNoDisplayedMessage": {
+    "message": "Thunderbird meldet keine aktuell angezeigte Nachricht."
+  },
+  "inviteSendingResponse": {
+    "message": "Antwort wird über Microsoft 365 gesendet …"
+  },
+  "inviteResponseFailed": {
+    "message": "Antwort fehlgeschlagen: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "inviteErrorNoMessage": {
+    "message": "Keine Nachrichten-ID für die Einladungsprüfung übergeben."
+  },
+  "inviteErrorNotInvitation": {
+    "message": "Die Nachricht enthält keine auswertbare iCalendar-Einladung."
+  },
+  "inviteErrorNoGraphEvent": {
+    "message": "Kein passender Exchange-Online-Termin für diese Einladung gefunden."
+  },
+  "inviteErrorOrganizer": {
+    "message": "Der angemeldete Benutzer ist Organisator dieses Termins und kann die eigene Einladung nicht beantworten."
+  },
+  "inviteErrorCancelled": {
+    "message": "Dieser Termin ist in Exchange Online bereits abgesagt."
+  },
+  "autoSyncInterval": {
+    "message": "Automatische Synchronisation"
+  },
+  "autoSyncHelp": {
+    "message": "Intervall in Minuten; 0 deaktiviert die automatische Synchronisation. Der Abgleich läuft, solange der Microsoft-365-Space geöffnet ist."
+  },
+  "syncCacheTitle": {
+    "message": "Synchronisation & Offline-Cache"
+  },
+  "syncCacheDescription": {
+    "message": "Der Microsoft-365-Space behält den V1.20-Graph-Cache; die native Kalenderansicht verwendet zusätzlich Thunderbirds eigenen Kalendercache."
+  },
+  "forceFullSync": {
+    "message": "Vollabgleich erzwingen"
+  },
+  "clearOfflineCache": {
+    "message": "Offline-Cache leeren"
+  },
+  "syncInfoOffline": {
+    "message": "Offline-Cache · Stand $TIME$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      }
+    }
+  },
+  "syncInfoFull": {
+    "message": "Vollabgleich · $TIME$ · $COUNT$ Termine",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "syncInfoDelta": {
+    "message": "Delta · $TIME$ · +$ADDED$ ~ $UPDATED$ −$REMOVED$",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      },
+      "added": {
+        "content": "$2"
+      },
+      "updated": {
+        "content": "$3"
+      },
+      "removed": {
+        "content": "$4"
+      }
+    }
+  },
+  "syncTokenRecovered": {
+    "message": "Delta-Status automatisch erneuert"
+  },
+  "offlineCacheNotice": {
+    "message": "Microsoft Graph ist nicht erreichbar. Der zuletzt synchronisierte Offline-Stand wird angezeigt."
+  },
+  "cacheStats": {
+    "message": "$WINDOWS$ Cache-Fenster · $EVENTS$ Termine · letzter Abgleich: $TIME$",
+    "placeholders": {
+      "windows": {
+        "content": "$1"
+      },
+      "events": {
+        "content": "$2"
+      },
+      "time": {
+        "content": "$3"
+      }
+    }
+  },
+  "cacheStatsUnavailable": {
+    "message": "Cache-Status konnte nicht gelesen werden."
+  },
+  "confirmClearCache": {
+    "message": "Den lokalen Microsoft-365-Kalendercache wirklich löschen? Die aktuell geöffnete Ansicht bleibt bis zum nächsten Laden sichtbar."
+  },
+  "cacheCleared": {
+    "message": "Offline-Cache wurde geleert."
+  },
+  "never": {
+    "message": "nie"
+  },
+  "recurring": {
+    "message": "Serientermin"
+  },
+  "errorUnsafeGraphUrl": {
+    "message": "Unsichere Microsoft-Graph-URL wurde blockiert."
+  },
+  "errorTooManyDeltaPages": {
+    "message": "Die Delta-Synchronisation lieferte ungewöhnlich viele Seiten und wurde aus Sicherheitsgründen abgebrochen."
+  },
+  "errorNoDeltaLink": {
+    "message": "Microsoft Graph hat keinen Delta-Status zurückgegeben."
+  },
+  "errorSyncRangeMissing": {
+    "message": "Für die Kalendersynchronisation fehlt der Zeitraum."
+  },
+  "syncInfoFullSecondary": {
+    "message": "Vollabgleich (weiterer Kalender) · $TIME$ · $COUNT$ Termine",
+    "placeholders": {
+      "time": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "nativeIntegrationTitle": {
+    "message": "Native Thunderbird-Kalenderintegration"
+  },
+  "nativeIntegrationDescription": {
+    "message": "Microsoft-365-Kalender erscheinen direkt in Thunderbirds normaler Kalenderansicht und werden bidirektional über Microsoft Graph synchronisiert."
+  },
+  "nativeIntegrationEnable": {
+    "message": "Microsoft-365-Kalender nativ in Thunderbird einbinden"
+  },
+  "nativeDaysBefore": {
+    "message": "Vergangenheit (Tage)"
+  },
+  "nativeDaysAfter": {
+    "message": "Zukunft (Tage)"
+  },
+  "nativeRangeHelp": {
+    "message": "V2.04 synchronisiert diesen Zeitraum in Thunderbirds lokalen Kalendercache. Standard: 90 Tage zurück, 365 Tage voraus."
+  },
+  "nativeSyncNow": {
+    "message": "Native Kalender synchronisieren"
+  },
+  "nativeExperimentWarning": {
+    "message": "Hinweis: Diese Funktion verwendet eine privilegierte Thunderbird-Experiment-API. Thunderbird zeigt deshalb bei der Installation die Berechtigung für vollen, uneingeschränkten Zugriff an."
+  },
+  "nativeStatusUnavailable": {
+    "message": "Native Kalender-API ist in dieser Thunderbird-Version nicht verfügbar."
+  },
+  "nativeStatusDisabled": {
+    "message": "Native Integration ist deaktiviert."
+  },
+  "nativeStatusNotSignedIn": {
+    "message": "Microsoft-Anmeldung erforderlich."
+  },
+  "nativeStatusActive": {
+    "message": "$COUNT$ native Microsoft-365-Kalender aktiv.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeStatusError": {
+    "message": "Native Integration: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeSyncComplete": {
+    "message": "$COUNT$ native Kalender zur Synchronisation angestoßen.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeErrorCalendarIdMissing": {
+    "message": "Microsoft-365-Kalender-ID fehlt."
+  },
+  "nativeErrorDisabled": {
+    "message": "Die native Thunderbird-Kalenderintegration ist deaktiviert."
+  },
+  "nativeSyncResult": {
+    "message": "$EVENTS$ Termine in $PAGES$ Graph-Seite(n) synchronisiert.",
+    "placeholders": {
+      "events": {
+        "content": "$1"
+      },
+      "pages": {
+        "content": "$2"
+      }
+    }
+  },
+  "categories": {
+    "message": "Kategorien"
+  },
+  "categoriesPlaceholder": {
+    "message": "Projekt A; Kunde"
+  },
+  "reminder": {
+    "message": "Erinnerung"
+  },
+  "reminderNone": {
+    "message": "Keine"
+  },
+  "reminderAtStart": {
+    "message": "Bei Beginn"
+  },
+  "reminderOneDay": {
+    "message": "1 Tag vorher"
+  },
+  "reminderMinutes": {
+    "message": "$1 Minuten vorher"
+  },
+  "editEvent": {
+    "message": "Bearbeiten"
+  },
+  "deleteEvent": {
+    "message": "Löschen"
+  },
+  "editEventTitle": {
+    "message": "Termin bearbeiten"
+  },
+  "editEventSubtitle": {
+    "message": "Änderungen direkt in Microsoft 365 speichern"
+  },
+  "saveChanges": {
+    "message": "Änderungen speichern"
+  },
+  "eventUpdated": {
+    "message": "Termin aktualisiert."
+  },
+  "eventDeleted": {
+    "message": "Termin gelöscht."
+  },
+  "confirmDeleteEvent": {
+    "message": "Diesen Termin wirklich löschen?"
+  },
+  "allDayEvent": {
+    "message": "Ganztägiger Termin"
+  },
+  "showAs": {
+    "message": "Anzeigen als"
+  },
+  "showBusy": {
+    "message": "Beschäftigt"
+  },
+  "showFree": {
+    "message": "Frei"
+  },
+  "showTentative": {
+    "message": "Mit Vorbehalt"
+  },
+  "showOof": {
+    "message": "Abwesend"
+  },
+  "showWorkingElsewhere": {
+    "message": "Anderswo tätig"
+  },
+  "sensitivity": {
+    "message": "Vertraulichkeit"
+  },
+  "sensitivityNormal": {
+    "message": "Normal"
+  },
+  "sensitivityPrivate": {
+    "message": "Privat"
+  },
+  "sensitivityConfidential": {
+    "message": "Vertraulich"
+  },
+  "recurrence": {
+    "message": "Serie"
+  },
+  "recurrencePattern": {
+    "message": "Wiederholung"
+  },
+  "recurrenceNone": {
+    "message": "Keine"
+  },
+  "recurrenceDaily": {
+    "message": "Täglich"
+  },
+  "recurrenceWeekly": {
+    "message": "Wöchentlich"
+  },
+  "recurrenceMonthly": {
+    "message": "Monatlich"
+  },
+  "recurrenceYearly": {
+    "message": "Jährlich"
+  },
+  "recurrenceInterval": {
+    "message": "Intervall"
+  },
+  "recurrenceEnd": {
+    "message": "Ende"
+  },
+  "recurrenceNoEnd": {
+    "message": "Kein Enddatum"
+  },
+  "recurrenceEndDate": {
+    "message": "Am Datum"
+  },
+  "recurrenceOccurrences": {
+    "message": "Nach Anzahl"
+  },
+  "endDate": {
+    "message": "Enddatum"
+  },
+  "occurrences": {
+    "message": "Vorkommen"
+  },
+  "recurrenceEditHint": {
+    "message": "Serienmuster werden beim Bearbeiten bestehender Termine derzeit nicht verändert."
+  },
+  "checkAvailability": {
+    "message": "Frei/Belegt prüfen"
+  },
+  "availabilityFree": {
+    "message": "Frei"
+  },
+  "availabilityBusy": {
+    "message": "Beschäftigt"
+  },
+  "availabilityTentative": {
+    "message": "Mit Vorbehalt"
+  },
+  "availabilityOof": {
+    "message": "Abwesend"
+  },
+  "availabilityWorkingElsewhere": {
+    "message": "Anderswo tätig"
+  },
+  "availabilityUnknown": {
+    "message": "Unbekannt"
+  },
+  "availabilityNeedAttendees": {
+    "message": "Bitte zuerst mindestens eine Teilnehmeradresse eingeben."
+  },
+  "errorScheduleAddressesMissing": {
+    "message": "Keine gültigen Teilnehmeradressen für Frei/Belegt gefunden."
+  },
+  "errorScheduleRange": {
+    "message": "Ungültiger Zeitraum für die Frei/Belegt-Abfrage."
+  },
+  "sharedShort": {
+    "message": "Freigegeben"
+  },
+  "sharedCalendarHelp": {
+    "message": "Freigegebene/delegierte Kalender, die Microsoft Graph unter /me/calendars liefert, werden automatisch angezeigt."
+  },
+  "standardBuildTitle": {
+    "message": "STANDARD-Build"
+  },
+  "standardBuildInfo": {
+    "message": "Ohne Thunderbird-Experiment-API und ohne Vollzugriff; Microsoft-365-Space, Mail-Einladungen und Graph-Synchronisation bleiben verfügbar."
+  },
+  "nativeBuildTitle": {
+    "message": "NATIVE-Build"
+  },
+  "nativeBuildInfo": {
+    "message": "Mit nativer Thunderbird-Kalenderintegration über eine privilegierte Experiment-API."
+  },
+  "nativeStatusStandardBuild": {
+    "message": "Diese XPI ist der STANDARD-Build. Er enthält absichtlich keinen nativen Thunderbird-Kalenderprovider. Für Kalender direkt in Thunderbirds normaler Kalenderansicht bitte den NATIVE-Build installieren."
+  },
+  "buildBannerNative": {
+    "message": "NATIVE-Build · native Thunderbird-Kalenderintegration verfügbar"
+  },
+  "buildBannerStandard": {
+    "message": "STANDARD-Build · keine native Thunderbird-Kalenderintegration – für die normale TB-Kalenderansicht NATIVE installieren"
+  },
+  "buildBannerNativeDetailed": {
+    "message": "NATIVE-Build · Version $VERSION$ · $STATE$",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      },
+      "state": {
+        "content": "$2"
+      }
+    }
+  },
+  "buildBannerStandardDetailed": {
+    "message": "STANDARD-Build · Version $VERSION$ · keine native Thunderbird-Kalenderintegration",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeApiLoaded": {
+    "message": "Native Provider-API geladen"
+  },
+  "nativeApiNotLoaded": {
+    "message": "Native Provider-API NICHT geladen"
+  },
+  "nativeRegistryState": {
+    "message": "Calendar Manager: $MANAGER$ · Provider: $UI$ · TB-Kalender: $COUNT$",
+    "placeholders": {
+      "manager": {
+        "content": "$1"
+      },
+      "ui": {
+        "content": "$2"
+      },
+      "count": {
+        "content": "$3"
+      }
+    }
+  },
+  "yes": {
+    "message": "ja"
+  },
+  "no": {
+    "message": "nein"
+  },
+  "syncDetailHealth": {
+    "message": "Details nachgeladen: $HYDRATED$ · ungelöst: $UNRESOLVED$ · ohne Betreff: $MISSING$",
+    "placeholders": {
+      "hydrated": {
+        "content": "$1"
+      },
+      "unresolved": {
+        "content": "$2"
+      },
+      "missing": {
+        "content": "$3"
+      }
+    }
+  },
+  "nativeStatusApiNotLoaded": {
+    "message": "NATIVE-Paket installiert, aber die Thunderbird-Experiment-API wurde nicht geladen. Die normale M365-Oberfläche bleibt verfügbar; Thunderbird neu starten und Add-on-Fehlerkonsole prüfen."
+  },
+  "nativeProviderModuleLoaded": {
+    "message": "Provider-Modul: geladen"
+  },
+  "nativeProviderModuleNotLoaded": {
+    "message": "Provider-Modul: noch nicht geladen"
+  },
+  "nativeProviderModuleFailed": {
+    "message": "Provider-Modul FEHLER: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeApiDeferred": {
+    "message": "Native API noch nicht initialisiert"
+  },
+  "nativeStatusProbing": {
+    "message": "Native Thunderbird-Brücke wird geprüft …"
+  },
+  "nativeBridgeFailed": {
+    "message": "Native Thunderbird-Brücke konnte nicht geladen werden: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeAutoEnsureOk": {
+    "message": "Kalenderregistrierung: $GRAPH$ Graph-Kalender gefunden, $REGISTERED$ in Thunderbird registriert",
+    "placeholders": {
+      "graph": {
+        "content": "$1"
+      },
+      "registered": {
+        "content": "$2"
+      }
+    }
+  },
+  "nativeAutoEnsureFailed": {
+    "message": "Kalenderregistrierung fehlgeschlagen: $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "unknownError": {
+    "message": "Unbekannter Fehler"
+  },
+  "nativeTeamsMeetingButton": {
+    "message": "Teams-Meeting"
+  },
+  "nativeTeamsMeetingTooltip": {
+    "message": "Neues Microsoft-Teams-Meeting im Microsoft-365-Kalender erstellen"
+  },
+  "nativeTeamsMeetingPopupTitle": {
+    "message": "Neues Teams-Meeting"
+  },
+  "nativeTeamsMeetingContext": {
+    "message": "Neues Teams-Meeting"
+  },
+  "attendeeAddressBookHelp": {
+    "message": "Beim Tippen werden passende Kontakte aus den Thunderbird-Adressbüchern vorgeschlagen."
+  },
+  "attendeeSearchSearching": {
+    "message": "Adressbücher werden durchsucht …"
+  },
+  "attendeeSearchNoResults": {
+    "message": "Keine passenden Kontakte im Thunderbird-Adressbuch gefunden."
+  },
+  "attendeeSearchResultCount": {
+    "message": "$COUNT$ Kontakt(e) gefunden.",
+    "placeholders": {
+      "COUNT": {
+        "content": "$1"
+      }
+    }
+  },
+  "attendeeSearchUnavailable": {
+    "message": "Adressbuchsuche nicht verfügbar: $ERROR$",
+    "placeholders": {
+      "ERROR": {
+        "content": "$1"
+      }
+    }
+  },
+  "nativeEventEditorPopupTitle": {
+    "message": "Microsoft-365-Termin bearbeiten"
+  },
+  "eventNotFound": {
+    "message": "Der Microsoft-365-Termin konnte nicht geladen werden."
+  }
+}

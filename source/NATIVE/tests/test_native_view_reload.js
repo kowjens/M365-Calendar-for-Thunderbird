@@ -1,0 +1,12 @@
+"use strict";
+const fs=require("fs"),path=require("path"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments","nativeCalendar","api.js"),"utf8");
+const schema=JSON.parse(fs.readFileSync(path.join(root,"experiments","nativeCalendar","schema.json"),"utf8"));
+assert.ok(api.includes("function reloadOpenCalendarViews(reason = \"manual\")"));
+assert.ok(api.includes("Services.wm.getEnumerator(null)"));
+assert.ok(api.includes("view.goToDay();"));
+assert.ok(api.includes("Services.tm.dispatchToMainThread"));
+assert.ok(api.includes("calendar-main-in-composite"));
+assert.ok(schema[0].functions.some(f=>f.name==="reloadViews"));
+console.log("native current-view reload V2.18: OK");

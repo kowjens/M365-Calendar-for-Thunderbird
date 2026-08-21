@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="invitePopupTitle">M365 Einladung</title>
+  <link rel="stylesheet" href="invite.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/m365-32.svg" alt="" width="28" height="28">
+    <div>
+      <h1 data-i18n="invitePopupTitle">M365 Einladung</h1>
+      <div id="headlineStatus" class="muted" data-i18n="inviteLoading">Einladung wird geprüft …</div>
+    </div>
+  </header>
+
+  <main>
+    <section id="loadingPanel" class="panel centered">
+      <div class="spinner" aria-hidden="true"></div>
+      <p data-i18n="inviteLoading">Einladung wird geprüft …</p>
+    </section>
+
+    <section id="notInvitePanel" class="panel hidden">
+      <h2 data-i18n="inviteNotInvitationTitle">Keine Kalendereinladung</h2>
+      <p data-i18n="inviteNotInvitationText">In der aktuell angezeigten Nachricht wurde keine iCalendar-Einladung gefunden.</p>
+    </section>
+
+    <section id="invitePanel" class="panel hidden">
+      <div class="event-head">
+        <div>
+          <div id="methodBadge" class="badge"></div>
+          <h2 id="subjectText"></h2>
+        </div>
+        <button id="refreshBtn" type="button" class="icon-btn" data-i18n-title="refresh" title="Aktualisieren">↻</button>
+      </div>
+
+      <dl class="details">
+        <div><dt data-i18n="time">Zeit</dt><dd id="timeText">—</dd></div>
+        <div><dt data-i18n="location">Ort</dt><dd id="locationText">—</dd></div>
+        <div><dt data-i18n="organizer">Organisator</dt><dd id="organizerText">—</dd></div>
+        <div><dt data-i18n="status">Status</dt><dd id="responseText">—</dd></div>
+      </dl>
+
+      <div id="matchBox" class="info-box"></div>
+
+      <label id="commentWrap" class="field hidden">
+        <span data-i18n="optionalReply">Optionale Antwort an den Organisator</span>
+        <textarea id="commentInput" rows="2" data-i18n-placeholder="commentPlaceholder" placeholder="Kommentar …"></textarea>
+      </label>
+      <label id="sendWrap" class="check-row hidden">
+        <input id="sendResponseCheck" type="checkbox" checked>
+        <span data-i18n="sendReply">Antwort an Organisator senden</span>
+      </label>
+
+      <div id="linkRow" class="button-row"></div>
+      <div id="responseRow" class="button-row response-row hidden">
+        <button type="button" data-response="decline" class="danger" data-i18n="decline">Ablehnen</button>
+        <button type="button" data-response="tentativelyAccept" class="secondary" data-i18n="tentative">Vorbehalt</button>
+        <button type="button" data-response="accept" class="primary" data-i18n="accept">Annehmen</button>
+      </div>
+    </section>
+
+    <section id="errorPanel" class="panel error-panel hidden">
+      <h2 data-i18n="inviteErrorTitle">Einladung konnte nicht verarbeitet werden</h2>
+      <p id="errorText"></p>
+    </section>
+  </main>
+
+  <footer>
+    <button id="openSpaceBtn" type="button" class="ghost" data-i18n="inviteOpenM365">Microsoft 365 öffnen</button>
+  </footer>
+
+  <script src="invite.js"></script>
+</body>
+</html>

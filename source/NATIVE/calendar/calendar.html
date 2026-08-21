@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="pageTitle">Microsoft 365 Kalender</title>
+  <link rel="stylesheet" href="calendar.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="../icons/m365-64.svg" alt="" width="36" height="36">
+      <div>
+        <h1>Microsoft 365</h1>
+        <div class="subtitle" data-i18n="subtitle">Kalender &amp; Teams-Meetings</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div id="accountBadge" class="account-badge" data-i18n="notSignedIn">Nicht angemeldet</div>
+      <button id="settingsBtn" class="icon-btn" data-i18n-title="settings" data-i18n-aria-label="settings" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+    </div>
+  </header>
+  <div id="buildModeBanner" class="build-mode-banner"></div>
+
+  <main>
+    <section id="welcomePanel" class="welcome panel hidden">
+      <div class="welcome-icon">M365</div>
+      <h2 data-i18n="welcomeTitle">Microsoft 365 Kalender verbinden</h2>
+      <p id="welcomeText" data-i18n="welcomeInitial">Für die erste Verwendung müssen die Entra-App-Daten hinterlegt und die Microsoft-Anmeldung durchgeführt werden.</p>
+      <div class="button-row centered">
+        <button id="welcomeSettingsBtn" class="secondary" data-i18n="openSettings">Einstellungen öffnen</button>
+        <button id="welcomeLoginBtn" class="primary" data-i18n="signInMicrosoft">Mit Microsoft anmelden</button>
+      </div>
+    </section>
+
+    <section id="calendarApp" class="app hidden">
+      <div class="toolbar panel">
+        <div class="nav-group">
+          <button id="prevBtn" class="icon-btn" data-i18n-title="previousMonth" data-i18n-aria-label="previousMonth" title="Vorheriger Monat" aria-label="Vorheriger Monat">‹</button>
+          <button id="todayBtn" class="secondary compact" data-i18n="today">Heute</button>
+          <button id="nextBtn" class="icon-btn" data-i18n-title="nextMonth" data-i18n-aria-label="nextMonth" title="Nächster Monat" aria-label="Nächster Monat">›</button>
+          <h2 id="monthTitle" class="month-title"></h2>
+        </div>
+        <div class="toolbar-right">
+          <label class="select-wrap">
+            <span data-i18n="calendar">Kalender</span>
+            <select id="calendarSelect"></select>
+          </label>
+          <button id="refreshBtn" class="secondary compact" data-i18n="refresh">Aktualisieren</button>
+          <button id="newEventBtn" class="primary" data-i18n="newEvent">+ Neuer Termin</button>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <section class="calendar-panel panel">
+          <div class="weekday-row" aria-hidden="true">
+            <div data-i18n="weekdayMon">Mo</div><div data-i18n="weekdayTue">Di</div><div data-i18n="weekdayWed">Mi</div><div data-i18n="weekdayThu">Do</div><div data-i18n="weekdayFri">Fr</div><div data-i18n="weekdaySat">Sa</div><div data-i18n="weekdaySun">So</div>
+          </div>
+          <div id="monthGrid" class="month-grid"></div>
+        </section>
+
+        <aside class="agenda-panel panel">
+          <div class="agenda-head">
+            <div>
+              <h3 id="agendaTitle" data-i18n="events">Termine</h3>
+              <div id="syncInfo" class="muted"></div>
+            </div>
+          </div>
+          <div id="agendaList" class="agenda-list"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" id="settingsForm">
+      <div class="dialog-head">
+        <div>
+          <h2 data-i18n="settings">Einstellungen</h2>
+          <p data-i18n="settingsSubtitle">Microsoft Entra / Graph</p>
+        </div>
+        <button type="button" class="close-btn" data-close="settingsDialog" data-i18n-aria-label="close" aria-label="Schließen">×</button>
+      </div>
+      <div class="dialog-body form-grid">
+        <label>
+          <span data-i18n="clientId">Application (Client) ID</span>
+          <input id="clientIdInput" type="text" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </label>
+        <label>
+          <span data-i18n="tenant">Tenant</span>
+          <input id="tenantInput" type="text" autocomplete="off" placeholder="contoso.onmicrosoft.com">
+          <small data-i18n="tenantHelp">Tenant-ID oder onmicrosoft.com-Domain.</small>
+        </label>
+        <label>
+          <span data-i18n="timeZone">Exchange-Zeitzone</span>
+          <input id="timeZoneInput" type="text" autocomplete="off" placeholder="W. Europe Standard Time">
+        </label>
+        <label>
+          <span data-i18n="autoSyncInterval">Automatische Synchronisation</span>
+          <input id="autoSyncMinutesInput" type="number" min="0" max="60" step="1">
+          <small data-i18n="autoSyncHelp">Intervall in Minuten; 0 deaktiviert die automatische Synchronisation.</small>
+        </label>
+        <label class="wide">
+          <span data-i18n="redirectUri">OAuth Redirect URI</span>
+          <div class="copy-row">
+            <input id="redirectUriInput" type="text" readonly>
+            <button id="copyRedirectBtn" type="button" class="secondary compact" data-i18n="copy">Kopieren</button>
+          </div>
+          <small data-i18n="redirectHelp">Diese URL in Entra als Redirect URI vom Typ Single-page application (SPA) eintragen.</small>
+        </label>
+        <div class="info-box wide">
+          <strong data-i18n="requiredPermissions">Benötigte delegierte Graph-Rechte</strong>
+          <span data-i18n="permissionsList">User.Read, Calendars.ReadWrite, Calendars.ReadWrite.Shared</span>
+          <span id="buildInfo" class="muted"></span>
+        </div>
+        <div class="info-box wide">
+          <strong data-i18n="syncCacheTitle">Synchronisation &amp; Offline-Cache</strong>
+          <span data-i18n="syncCacheDescription">Der Microsoft-365-Space behält den V1.20-Graph-Cache; die native Kalenderansicht verwendet zusätzlich Thunderbirds eigenen Kalendercache.</span>
+          <span id="cacheInfo" class="muted"></span>
+          <div class="button-row cache-actions">
+            <button id="fullSyncBtn" type="button" class="secondary compact" data-i18n="forceFullSync">Vollabgleich erzwingen</button>
+            <button id="clearCacheBtn" type="button" class="danger ghost compact" data-i18n="clearOfflineCache">Offline-Cache leeren</button>
+          </div>
+        </div>
+        <div id="nativeIntegrationBox" class="info-box wide">
+          <strong data-i18n="nativeIntegrationTitle">Native Thunderbird-Kalenderintegration</strong>
+          <span data-i18n="nativeIntegrationDescription">Microsoft-365-Kalender erscheinen direkt in Thunderbirds normaler Kalenderansicht und werden bidirektional über Microsoft Graph synchronisiert.</span>
+          <label class="check-row native-enable">
+            <input id="nativeIntegrationCheck" type="checkbox">
+            <span data-i18n="nativeIntegrationEnable">Microsoft-365-Kalender nativ in Thunderbird einbinden</span>
+          </label>
+          <div class="native-range-grid">
+            <label>
+              <span data-i18n="nativeDaysBefore">Vergangenheit (Tage)</span>
+              <input id="nativeDaysBeforeInput" type="number" min="0" max="730" step="1">
+            </label>
+            <label>
+              <span data-i18n="nativeDaysAfter">Zukunft (Tage)</span>
+              <input id="nativeDaysAfterInput" type="number" min="1" max="1095" step="1">
+            </label>
+          </div>
+          <small data-i18n="nativeRangeHelp">V2.16 synchronisiert diesen Zeitraum in Thunderbirds lokalen Kalendercache. Standard: 90 Tage zurück, 365 Tage voraus.</small>
+          <span id="nativeStatusText" class="muted"></span>
+          <details id="nativeDebugDetails" class="native-debug-details">
+            <summary data-i18n="nativeDiagnosticsTitle">Native Diagnose</summary>
+            <pre id="nativeDebugText" class="native-debug-text"></pre>
+          </details>
+          <span id="nativeExperimentWarning" class="warning-text" data-i18n="nativeExperimentWarning">Hinweis: Diese Funktion verwendet eine privilegierte Thunderbird-Experiment-API.</span>
+          <div class="button-row cache-actions">
+            <button id="nativeSyncBtn" type="button" class="secondary compact" data-i18n="nativeSyncNow">Native Kalender synchronisieren</button>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <div id="loginStateText" class="muted"></div>
+        <div class="button-row">
+          <button id="logoutBtn" type="button" class="danger ghost" data-i18n="signOut">Abmelden</button>
+          <button id="loginBtn" type="button" class="secondary" data-i18n="microsoftLogin">Microsoft Login</button>
+          <button id="saveSettingsBtn" type="submit" class="primary" data-i18n="save">Speichern</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="eventDialog" class="dialog event-dialog">
+    <div class="dialog-head">
+      <div>
+        <h2 id="eventTitle" data-i18n="event">Termin</h2>
+        <p id="eventSubline"></p>
+      </div>
+      <button type="button" class="close-btn" data-close="eventDialog" data-i18n-aria-label="close" aria-label="Schließen">×</button>
+    </div>
+    <div class="dialog-body">
+      <dl class="details">
+        <div><dt data-i18n="time">Zeit</dt><dd id="eventTime"></dd></div>
+        <div><dt data-i18n="location">Ort</dt><dd id="eventLocation"></dd></div>
+        <div><dt data-i18n="organizer">Organisator</dt><dd id="eventOrganizer"></dd></div>
+        <div><dt data-i18n="status">Status</dt><dd id="eventStatus"></dd></div>
+        <div class="detail-wide"><dt data-i18n="attendees">Teilnehmer</dt><dd id="eventAttendees"></dd></div>
+        <div><dt data-i18n="categories">Kategorien</dt><dd id="eventCategories"></dd></div>
+        <div><dt data-i18n="reminder">Erinnerung</dt><dd id="eventReminder"></dd></div>
+      </dl>
+      <div id="eventPreview" class="event-preview"></div>
+      <label id="responseCommentWrap" class="response-comment">
+        <span data-i18n="optionalReply">Optionale Antwort an den Organisator</span>
+        <textarea id="responseComment" rows="2" data-i18n-placeholder="commentPlaceholder" placeholder="Kommentar …"></textarea>
+      </label>
+      <label id="sendResponseWrap" class="check-row">
+        <input id="sendResponseCheck" type="checkbox" checked>
+        <span data-i18n="sendReply">Antwort an Organisator senden</span>
+      </label>
+    </div>
+    <div class="dialog-foot event-foot">
+      <div class="button-row" id="eventLinks"></div>
+      <div class="button-row" id="eventOwnerButtons">
+        <button id="editEventBtn" type="button" class="secondary" data-i18n="editEvent">Bearbeiten</button>
+        <button id="deleteEventBtn" type="button" class="danger ghost" data-i18n="deleteEvent">Löschen</button>
+      </div>
+      <div class="button-row" id="responseButtons">
+        <button type="button" data-response="decline" class="danger ghost" data-i18n="decline">Ablehnen</button>
+        <button type="button" data-response="tentativelyAccept" class="secondary" data-i18n="tentative">Vorbehalt</button>
+        <button type="button" data-response="accept" class="primary" data-i18n="accept">Annehmen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="newEventDialog" class="dialog new-event-dialog">
+    <form method="dialog" id="newEventForm">
+      <div class="dialog-head">
+        <div>
+          <h2 id="newEventTitleText" data-i18n="newEventTitle">Neuer Termin</h2>
+          <p id="newEventSubtitleText" data-i18n="newEventSubtitle">Direkt im Microsoft-365-Kalender erstellen</p>
+        </div>
+        <button type="button" class="close-btn" data-close="newEventDialog" data-i18n-aria-label="close" aria-label="Schließen">×</button>
+      </div>
+      <div class="dialog-body form-grid">
+        <label class="wide">
+          <span data-i18n="subject">Betreff</span>
+          <input id="newSubject" type="text" required autofocus>
+        </label>
+        <label>
+          <span data-i18n="start">Beginn</span>
+          <input id="newStart" type="datetime-local" required>
+        </label>
+        <label>
+          <span data-i18n="end">Ende</span>
+          <input id="newEnd" type="datetime-local" required>
+        </label>
+        <label class="check-row wide">
+          <input id="newAllDay" type="checkbox">
+          <span data-i18n="allDayEvent">Ganztägiger Termin</span>
+        </label>
+        <label class="wide">
+          <span data-i18n="attendees">Teilnehmer</span>
+          <input id="newAttendees" type="text" autocomplete="off" aria-autocomplete="list" aria-controls="attendeeSuggestions" data-i18n-placeholder="attendeesPlaceholder" placeholder="max@example.com; anna@example.com">
+          <div id="attendeeSuggestions" class="attendee-suggestions hidden" role="listbox"></div>
+          <small id="attendeeSearchStatus" class="attendee-search-status hidden" aria-live="polite"></small>
+          <small data-i18n="attendeesHelp">Mehrere Adressen mit Semikolon oder Komma trennen.</small>
+          <small data-i18n="attendeeAddressBookHelp">Beim Tippen werden passende Kontakte aus den Thunderbird-Adressbüchern vorgeschlagen.</small>
+          <div class="button-row inline-actions">
+            <button id="checkAvailabilityBtn" type="button" class="secondary compact" data-i18n="checkAvailability">Frei/Belegt prüfen</button>
+          </div>
+          <div id="availabilityResults" class="availability-results hidden"></div>
+        </label>
+        <label class="wide">
+          <span data-i18n="location">Ort</span>
+          <input id="newLocation" type="text">
+        </label>
+        <label>
+          <span data-i18n="reminder">Erinnerung</span>
+          <select id="newReminder">
+            <option value="" data-i18n="reminderNone">Keine</option>
+            <option value="0" data-i18n="reminderAtStart">Bei Beginn</option>
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15" selected>15 min</option>
+            <option value="30">30 min</option>
+            <option value="60">60 min</option>
+            <option value="1440" data-i18n="reminderOneDay">1 Tag</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="showAs">Anzeigen als</span>
+          <select id="newShowAs">
+            <option value="busy" data-i18n="showBusy">Beschäftigt</option>
+            <option value="free" data-i18n="showFree">Frei</option>
+            <option value="tentative" data-i18n="showTentative">Mit Vorbehalt</option>
+            <option value="oof" data-i18n="showOof">Abwesend</option>
+            <option value="workingElsewhere" data-i18n="showWorkingElsewhere">Anderswo tätig</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="sensitivity">Vertraulichkeit</span>
+          <select id="newSensitivity">
+            <option value="normal" data-i18n="sensitivityNormal">Normal</option>
+            <option value="private" data-i18n="sensitivityPrivate">Privat</option>
+            <option value="confidential" data-i18n="sensitivityConfidential">Vertraulich</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="categories">Kategorien</span>
+          <input id="newCategories" type="text" data-i18n-placeholder="categoriesPlaceholder" placeholder="Projekt A; Kunde">
+        </label>
+        <fieldset class="wide recurrence-box">
+          <legend data-i18n="recurrence">Serie</legend>
+          <div class="recurrence-grid">
+            <label>
+              <span data-i18n="recurrencePattern">Wiederholung</span>
+              <select id="newRecurrenceType">
+                <option value="none" data-i18n="recurrenceNone">Keine</option>
+                <option value="daily" data-i18n="recurrenceDaily">Täglich</option>
+                <option value="weekly" data-i18n="recurrenceWeekly">Wöchentlich</option>
+                <option value="monthly" data-i18n="recurrenceMonthly">Monatlich</option>
+                <option value="yearly" data-i18n="recurrenceYearly">Jährlich</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="recurrenceInterval">Intervall</span>
+              <input id="newRecurrenceInterval" type="number" min="1" max="99" value="1">
+            </label>
+            <label>
+              <span data-i18n="recurrenceEnd">Ende</span>
+              <select id="newRecurrenceEndType">
+                <option value="noEnd" data-i18n="recurrenceNoEnd">Kein Enddatum</option>
+                <option value="endDate" data-i18n="recurrenceEndDate">Am Datum</option>
+                <option value="numbered" data-i18n="recurrenceOccurrences">Nach Anzahl</option>
+              </select>
+            </label>
+            <label id="recurrenceEndDateWrap" class="hidden">
+              <span data-i18n="endDate">Enddatum</span>
+              <input id="newRecurrenceEndDate" type="date">
+            </label>
+            <label id="recurrenceCountWrap" class="hidden">
+              <span data-i18n="occurrences">Vorkommen</span>
+              <input id="newRecurrenceCount" type="number" min="1" max="999" value="10">
+            </label>
+          </div>
+          <small id="recurrenceEditHint" class="hidden" data-i18n="recurrenceEditHint">Serienmuster werden in V2.01 beim Bearbeiten bestehender Termine nicht verändert.</small>
+        </fieldset>
+        <label class="wide">
+          <span data-i18n="description">Beschreibung</span>
+          <textarea id="newBody" rows="4"></textarea>
+        </label>
+        <label class="check-row wide">
+          <input id="newTeams" type="checkbox" checked>
+          <span data-i18n="createTeamsMeeting">Als Microsoft Teams-Besprechung anlegen</span>
+        </label>
+      </div>
+      <div class="dialog-foot">
+        <div class="muted" id="newEventInfo"></div>
+        <div class="button-row">
+          <button type="button" class="secondary" data-close="newEventDialog" data-i18n="cancel">Abbrechen</button>
+          <button id="saveEventBtn" type="submit" class="primary" data-i18n="createEvent">Termin erstellen</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script src="calendar.js"></script>
+</body>
+</html>

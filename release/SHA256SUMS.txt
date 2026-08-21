@@ -1,0 +1,2 @@
+52771761eff234fdb5ff8fb33c433dae9cc3501e52dbb994ba1b4f8f3fa8e8d0  M365_Thunderbird_Calendar_V2.19_NATIVE.xpi
+3410d4cedd54cf0f895b7cadd99b15654909d09cd64e2b3648de1bc33b53afb3  M365_Thunderbird_Calendar_V2.19_STANDARD.xpi

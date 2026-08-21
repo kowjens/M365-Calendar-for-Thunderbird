@@ -1,0 +1,1397 @@
+"use strict";
+
+const $ = id => document.getElementById(id);
+const LAUNCH_PARAMS = new URLSearchParams(window.location.search);
+const NATIVE_TEAMS_POPUP = LAUNCH_PARAMS.get("nativeTeams") === "1";
+const NATIVE_TEAMS_CALENDAR_ID = LAUNCH_PARAMS.get("calendarId") || "";
+const NATIVE_TEAMS_START = LAUNCH_PARAMS.get("start") || "";
+const NATIVE_EDIT_EVENT_ID = LAUNCH_PARAMS.get("editEventId") || "";
+const els = {};
+const state = {
+  config: null,
+  auth: null,
+  calendars: [],
+  events: [],
+  cursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  selectedEventId: null,
+  loading: false,
+  sync: null,
+  calendarSource: null,
+  autoSyncTimer: null,
+  editingEventId: null
+};
+
+const UI_LOCALE = browser.i18n.getUILanguage() || navigator.language || "de";
+const monthFormatter = new Intl.DateTimeFormat(UI_LOCALE, { month: "long", year: "numeric" });
+const dayFormatter = new Intl.DateTimeFormat(UI_LOCALE, { weekday: "short", day: "2-digit", month: "2-digit" });
+const dateTimeFormatter = new Intl.DateTimeFormat(UI_LOCALE, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const timeFormatter = new Intl.DateTimeFormat(UI_LOCALE, { hour: "2-digit", minute: "2-digit" });
+
+function t(key, substitutions) {
+  return browser.i18n.getMessage(key, substitutions) || key;
+}
+
+function applyI18n() {
+  document.documentElement.lang = UI_LOCALE;
+  for (const node of document.querySelectorAll("[data-i18n]")) {
+    node.textContent = t(node.dataset.i18n);
+  }
+  for (const node of document.querySelectorAll("[data-i18n-title]")) {
+    node.title = t(node.dataset.i18nTitle);
+  }
+  for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  }
+  for (const node of document.querySelectorAll("[data-i18n-placeholder]")) {
+    node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
+  }
+}
+
+function updateBuildModeBanner() {
+  if (!els.buildModeBanner || !state.auth) return;
+  // nativeMode describes the XPI that is installed. nativeCapable describes
+  // whether Thunderbird actually loaded the Experiment API. Keeping those two
+  // states separate prevents a broken NATIVE provider from being mislabeled
+  // as a STANDARD build.
+  const packagedNative = Boolean(state.auth.nativeMode);
+  const version = state.auth.version || "2.0.19";
+  els.buildModeBanner.className = `build-mode-banner ${packagedNative ? "native" : "standard"}`;
+  if (packagedNative) {
+    const apiLabel = state.auth.nativeCapable
+      ? t("nativeApiLoaded")
+      : state.auth.nativeProbed
+        ? t("nativeApiNotLoaded")
+        : t("nativeApiDeferred");
+    els.buildModeBanner.textContent = t(
+      "buildBannerNativeDetailed",
+      [version, apiLabel]
+    );
+  } else {
+    els.buildModeBanner.textContent = t("buildBannerStandardDetailed", version);
+  }
+}
+
+async function api(action, extra = {}) {
+  const result = await browser.runtime.sendMessage({ action, ...extra });
+  if (!result?.ok) {
+    const error = new Error(result?.error || t("unknownAddonError"));
+    error.status = Number(result?.status || 0);
+    throw error;
+  }
+  return result.data;
+}
+
+
+let attendeeSearchTimer = null;
+let attendeeSearchSerial = 0;
+let attendeeSuggestions = [];
+let attendeeSuggestionIndex = -1;
+
+function attendeeTokenInfo() {
+  const value = String(els.newAttendees?.value || "");
+  const match = value.match(/^(.*?[;,]\s*)?([^;,]*)$/);
+  const prefix = match?.[1] || "";
+  const token = (match?.[2] || value).trim();
+  return { value, prefix, token };
+}
+
+function setAttendeeSearchStatus(message = "", kind = "") {
+  if (!els.attendeeSearchStatus) return;
+  els.attendeeSearchStatus.textContent = message;
+  els.attendeeSearchStatus.className = `attendee-search-status${kind ? ` ${kind}` : ""}${message ? "" : " hidden"}`;
+}
+
+function hideAttendeeSuggestions({ clearStatus = true } = {}) {
+  attendeeSuggestions = [];
+  attendeeSuggestionIndex = -1;
+  if (els.attendeeSuggestions) {
+    els.attendeeSuggestions.replaceChildren();
+    els.attendeeSuggestions.classList.add("hidden");
+  }
+  if (clearStatus) setAttendeeSearchStatus();
+}
+
+function chooseAttendeeSuggestion(index) {
+  const item = attendeeSuggestions[index];
+  if (!item?.email) return;
+  const { prefix } = attendeeTokenInfo();
+  els.newAttendees.value = `${prefix}${item.email}; `;
+  hideAttendeeSuggestions();
+  els.newAttendees.focus();
+  els.newAttendees.setSelectionRange(els.newAttendees.value.length, els.newAttendees.value.length);
+}
+
+function renderAttendeeSuggestions(items) {
+  attendeeSuggestions = Array.isArray(items) ? items : [];
+  attendeeSuggestionIndex = -1;
+  if (!els.attendeeSuggestions) return;
+  els.attendeeSuggestions.replaceChildren();
+  if (!attendeeSuggestions.length) {
+    els.attendeeSuggestions.classList.add("hidden");
+    setAttendeeSearchStatus(t("attendeeSearchNoResults"), "empty");
+    return;
+  }
+  setAttendeeSearchStatus(t("attendeeSearchResultCount", String(attendeeSuggestions.length)), "success");
+  attendeeSuggestions.forEach((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "attendee-suggestion";
+    button.setAttribute("role", "option");
+    const name = document.createElement("span");
+    name.className = "attendee-suggestion-name";
+    name.textContent = item.name || item.email;
+    const email = document.createElement("span");
+    email.className = "attendee-suggestion-email";
+    email.textContent = item.email;
+    button.append(name, email);
+    button.addEventListener("mousedown", event => event.preventDefault());
+    button.addEventListener("click", () => chooseAttendeeSuggestion(index));
+    els.attendeeSuggestions.appendChild(button);
+  });
+  els.attendeeSuggestions.classList.remove("hidden");
+}
+
+function updateAttendeeSuggestionSelection() {
+  if (!els.attendeeSuggestions) return;
+  [...els.attendeeSuggestions.querySelectorAll(".attendee-suggestion")].forEach((button, index) => {
+    button.classList.toggle("selected", index === attendeeSuggestionIndex);
+    button.setAttribute("aria-selected", index === attendeeSuggestionIndex ? "true" : "false");
+    if (index === attendeeSuggestionIndex) button.scrollIntoView({ block: "nearest" });
+  });
+}
+
+function scheduleAttendeeSearch() {
+  if (attendeeSearchTimer) clearTimeout(attendeeSearchTimer);
+  const { token } = attendeeTokenInfo();
+  if (token.length < 2 || token.includes("@") && /\.[A-Za-z]{2,}$/.test(token)) {
+    hideAttendeeSuggestions();
+    return;
+  }
+  const serial = ++attendeeSearchSerial;
+  attendeeSearchTimer = setTimeout(async () => {
+    attendeeSearchTimer = null;
+    setAttendeeSearchStatus(t("attendeeSearchSearching"));
+    try {
+      const items = await api("searchContacts", { query: token });
+      if (serial !== attendeeSearchSerial || attendeeTokenInfo().token !== token) return;
+      renderAttendeeSuggestions(items);
+    } catch (error) {
+      console.warn("M365 contact autocomplete unavailable", error);
+      hideAttendeeSuggestions({ clearStatus: false });
+      setAttendeeSearchStatus(t("attendeeSearchUnavailable", error.message || String(error)), "error");
+    }
+  }, 140);
+}
+
+function handleAttendeeSuggestionKeydown(event) {
+  if (!attendeeSuggestions.length || els.attendeeSuggestions?.classList.contains("hidden")) return;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    attendeeSuggestionIndex = (attendeeSuggestionIndex + 1) % attendeeSuggestions.length;
+    updateAttendeeSuggestionSelection();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    attendeeSuggestionIndex = attendeeSuggestionIndex <= 0 ? attendeeSuggestions.length - 1 : attendeeSuggestionIndex - 1;
+    updateAttendeeSuggestionSelection();
+  } else if (event.key === "Enter" && attendeeSuggestionIndex >= 0) {
+    event.preventDefault();
+    chooseAttendeeSuggestion(attendeeSuggestionIndex);
+  } else if (event.key === "Escape") {
+    hideAttendeeSuggestions();
+  }
+}
+
+async function fitNativeTeamsPopup() {
+  if (!NATIVE_TEAMS_POPUP || !browser.windows?.getCurrent || !browser.windows?.update) return;
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const dialog = els.newEventDialog?.open ? els.newEventDialog : (els.eventDialog?.open ? els.eventDialog : els.newEventDialog);
+  if (!dialog) return;
+
+  const availWidth = Math.max(420, Number(window.screen?.availWidth) || 900);
+  const availHeight = Math.max(420, Number(window.screen?.availHeight) || 700);
+  const maxWidth = Math.max(420, availWidth - 56);
+  const maxHeight = Math.max(500, availHeight - 72);
+
+  // Keep the window compact. Long event bodies/forms scroll in the dialog body,
+  // while header and action footer stay visible.
+  const desiredWidth = Math.min(700, maxWidth);
+  const naturalHeight = Math.max(540, Math.min(680, dialog.scrollHeight + 32));
+  const desiredHeight = Math.min(naturalHeight, maxHeight);
+
+  try {
+    const current = await browser.windows.getCurrent();
+    if (current?.id !== undefined) {
+      await browser.windows.update(current.id, {
+        width: Math.round(desiredWidth),
+        height: Math.round(desiredHeight)
+      });
+    }
+  } catch (error) {
+    console.warn("M365 Teams popup could not be fitted to the screen", error);
+  }
+}
+
+function toast(message, type = "") {
+  els.toast.textContent = message;
+  els.toast.className = `toast ${type}`.trim();
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => els.toast.classList.add("hidden"), 4200);
+}
+
+function setBusy(busy) {
+  state.loading = busy;
+  for (const id of ["prevBtn", "todayBtn", "nextBtn", "refreshBtn", "newEventBtn", "calendarSelect"]) {
+    if (els[id]) els[id].disabled = busy;
+  }
+  if (busy) els.syncInfo.textContent = t("syncing");
+}
+
+function localDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseGraphDate(value) {
+  if (!value) return null;
+  return new Date(value);
+}
+
+function eventStart(event) {
+  return parseGraphDate(event?.start?.dateTime);
+}
+
+function eventEnd(event) {
+  return parseGraphDate(event?.end?.dateTime);
+}
+
+function sameDay(a, b) {
+  return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function startOfGrid(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const jsDay = first.getDay();
+  const mondayOffset = (jsDay + 6) % 7;
+  first.setDate(first.getDate() - mondayOffset);
+  first.setHours(0, 0, 0, 0);
+  return first;
+}
+
+function endOfGrid(monthDate) {
+  const start = startOfGrid(monthDate);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 42);
+  return end;
+}
+
+function currentEvent() {
+  return state.events.find(event => event.id === state.selectedEventId) || null;
+}
+
+function responseLabel(response) {
+  const labels = {
+    organizer: t("responseOrganizer"),
+    accepted: t("responseAccepted"),
+    tentative: t("responseTentative"),
+    declined: t("responseDeclined"),
+    none: t("responseNone"),
+    notResponded: t("responseNotResponded")
+  };
+  return labels[response] || response || t("unknown");
+}
+
+function getJoinUrl(event) {
+  return event?.onlineMeeting?.joinUrl || event?.onlineMeetingUrl || "";
+}
+
+function isRecurringEvent(event) {
+  return Boolean(event?.seriesMasterId || event?.recurrence || ["seriesMaster", "occurrence", "exception"].includes(event?.type));
+}
+
+function formatEventTime(event) {
+  const start = eventStart(event);
+  const end = eventEnd(event);
+  if (!start || !end) return "";
+  if (event.isAllDay) return t("allDay");
+  if (sameDay(start, end)) return `${dateTimeFormatter.format(start)} – ${timeFormatter.format(end)}`;
+  return `${dateTimeFormatter.format(start)} – ${dateTimeFormatter.format(end)}`;
+}
+
+function createLink(label, url, className = "") {
+  const a = document.createElement("a");
+  a.textContent = label;
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  if (className) a.className = className;
+  return a;
+}
+
+async function loadState() {
+  state.config = await api("getConfig");
+  state.auth = await api("authStatus");
+  updateHeader();
+  updateBuildModeBanner();
+  if (!state.auth.loggedIn) {
+    showWelcome();
+    return;
+  }
+  await loadCalendarsAndEvents();
+}
+
+function updateHeader() {
+  const profile = state.auth?.profile;
+  if (state.auth?.loggedIn && profile) {
+    const address = profile.mail || profile.userPrincipalName || "Microsoft 365";
+    els.accountBadge.textContent = profile.displayName ? `${profile.displayName} · ${address}` : address;
+  } else if (state.auth?.loggedIn) {
+    els.accountBadge.textContent = t("connected");
+  } else {
+    els.accountBadge.textContent = t("notSignedIn");
+  }
+}
+
+function showWelcome() {
+  els.calendarApp.classList.add("hidden");
+  els.welcomePanel.classList.remove("hidden");
+  if (!state.auth?.configured) {
+    els.welcomeText.textContent = t("welcomeNeedsConfig");
+    els.welcomeLoginBtn.disabled = true;
+  } else {
+    els.welcomeText.textContent = t("welcomeReady");
+    els.welcomeLoginBtn.disabled = false;
+  }
+}
+
+function showCalendar() {
+  els.welcomePanel.classList.add("hidden");
+  els.calendarApp.classList.remove("hidden");
+}
+
+async function loadCalendarsAndEvents() {
+  setBusy(true);
+  try {
+    const calendarResult = await api("listCalendarsCached");
+    state.calendars = calendarResult.calendars || [];
+    state.calendarSource = calendarResult;
+    if (!state.calendars.length) throw new Error(t("noCalendars"));
+    let selected = state.config.selectedCalendarId;
+    if (!state.calendars.some(c => c.id === selected)) selected = state.calendars[0].id;
+    state.config.selectedCalendarId = selected;
+    await api("saveConfig", { config: { selectedCalendarId: selected } });
+    renderCalendarSelector();
+    showCalendar();
+    await loadEvents();
+  } catch (error) {
+    if (error.status === 401 || /anmeldung|sign[ -]?in|token|AADSTS/i.test(error.message)) {
+      state.auth = await api("authStatus");
+      updateHeader();
+      showWelcome();
+    }
+    toast(error.message, "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderCalendarSelector() {
+  els.calendarSelect.replaceChildren();
+  for (const calendar of state.calendars) {
+    const option = document.createElement("option");
+    option.value = calendar.id;
+    option.textContent = `${calendar.name || t("calendarFallback")}${calendar.isShared ? ` · ${t("sharedShort")}` : ""}`;
+    if (calendar.isShared) option.classList.add("shared-calendar");
+    option.selected = calendar.id === state.config.selectedCalendarId;
+    els.calendarSelect.appendChild(option);
+  }
+}
+
+function formatSyncInfo(sync) {
+  if (!sync) return "";
+  const when = sync.lastSyncAt ? timeFormatter.format(new Date(sync.lastSyncAt)) : t("unknown");
+  if (sync.source === "cache" || sync.offline) return t("syncInfoOffline", when);
+  if (sync.mode === "full" || sync.mode === "full-secondary") {
+    const loaded = String(sync.changes?.loaded ?? state.events.length);
+    let text = sync.mode === "full-secondary"
+      ? t("syncInfoFullSecondary", [when, loaded])
+      : t("syncInfoFull", [when, loaded]);
+    const hydrated = Number(sync.changes?.hydrated || 0);
+    const unresolved = Number(sync.changes?.unresolved || 0);
+    const missing = Number(sync.changes?.missingSubjects || 0);
+    if (hydrated || unresolved || missing) {
+      text += ` · ${t("syncDetailHealth", [String(hydrated), String(unresolved), String(missing)])}`;
+    }
+    return text;
+  }
+  const changes = sync.changes || {};
+  let text = t("syncInfoDelta", [when, String(changes.added || 0), String(changes.updated || 0), String(changes.removed || 0)]);
+  if (sync.recoveredFromStaleToken) text += ` · ${t("syncTokenRecovered")}`;
+  return text;
+}
+
+function stopAutoSync() {
+  if (state.autoSyncTimer) clearInterval(state.autoSyncTimer);
+  state.autoSyncTimer = null;
+}
+
+function restartAutoSync() {
+  stopAutoSync();
+  const minutes = Number(state.config?.autoSyncMinutes || 0);
+  if (!state.auth?.loggedIn || minutes <= 0) return;
+  state.autoSyncTimer = setInterval(() => {
+    if (!state.loading && document.visibilityState !== "hidden") loadEvents({ quiet: true });
+  }, Math.max(1, minutes) * 60 * 1000);
+}
+
+async function loadEvents({ forceFull = false, quiet = false } = {}) {
+  if (!state.config?.selectedCalendarId) return;
+  setBusy(true);
+  try {
+    const start = startOfGrid(state.cursor);
+    const end = endOfGrid(state.cursor);
+    const result = await api("getEvents", {
+      calendarId: state.config.selectedCalendarId,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      forceFull
+    });
+    state.events = result.events || [];
+    state.sync = result.sync || null;
+    renderAll();
+    els.syncInfo.textContent = formatSyncInfo(state.sync);
+    if (state.sync?.offline && !quiet) toast(t("offlineCacheNotice"), "");
+    restartAutoSync();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderAll() {
+  els.monthTitle.textContent = monthFormatter.format(state.cursor);
+  renderMonthGrid();
+  renderAgenda();
+}
+
+function eventsByStartDate() {
+  const map = new Map();
+  for (const event of state.events) {
+    const start = eventStart(event);
+    if (!start) continue;
+    const key = localDateKey(start);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(event);
+  }
+  for (const values of map.values()) values.sort((a, b) => eventStart(a) - eventStart(b));
+  return map;
+}
+
+function renderMonthGrid() {
+  els.monthGrid.replaceChildren();
+  const byDay = eventsByStartDate();
+  const start = startOfGrid(state.cursor);
+  const today = new Date();
+
+  for (let i = 0; i < 42; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    const cell = document.createElement("div");
+    cell.className = "day-cell";
+    if (date.getMonth() !== state.cursor.getMonth()) cell.classList.add("other-month");
+    if (sameDay(date, today)) cell.classList.add("today");
+
+    const number = document.createElement("div");
+    number.className = "day-number";
+    const n = document.createElement("span");
+    n.textContent = String(date.getDate());
+    number.appendChild(n);
+    cell.appendChild(number);
+
+    const dayEvents = byDay.get(localDateKey(date)) || [];
+    const maxVisible = 4;
+    for (const event of dayEvents.slice(0, maxVisible)) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "event-chip";
+      if (getJoinUrl(event)) chip.classList.add("teams");
+      if (event.isCancelled) chip.classList.add("cancelled");
+      const startTime = event.isAllDay ? "" : `${timeFormatter.format(eventStart(event))} `;
+      const recurring = isRecurringEvent(event) ? "↻ " : "";
+      chip.textContent = `${startTime}${recurring}${event.subject || t("noSubject")}`;
+      chip.title = `${event.subject || t("noSubject")}\n${formatEventTime(event)}`;
+      chip.addEventListener("click", () => openEvent(event.id));
+      cell.appendChild(chip);
+    }
+    if (dayEvents.length > maxVisible) {
+      const more = document.createElement("div");
+      more.className = "more-events";
+      more.textContent = t("moreEvents", String(dayEvents.length - maxVisible));
+      cell.appendChild(more);
+    }
+    els.monthGrid.appendChild(cell);
+  }
+}
+
+function renderAgenda() {
+  els.agendaList.replaceChildren();
+  els.agendaTitle.textContent = monthFormatter.format(state.cursor);
+  const month = state.cursor.getMonth();
+  const year = state.cursor.getFullYear();
+  const events = state.events.filter(event => {
+    const start = eventStart(event);
+    return start && start.getMonth() === month && start.getFullYear() === year;
+  });
+
+  if (!events.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = t("noEventsMonth");
+    els.agendaList.appendChild(empty);
+    return;
+  }
+
+  let previousKey = "";
+  for (const event of events) {
+    const start = eventStart(event);
+    const key = localDateKey(start);
+    if (key !== previousKey) {
+      const head = document.createElement("div");
+      head.className = "agenda-day";
+      head.textContent = dayFormatter.format(start);
+      els.agendaList.appendChild(head);
+      previousKey = key;
+    }
+
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "agenda-item";
+    item.addEventListener("click", () => openEvent(event.id));
+
+    const time = document.createElement("div");
+    time.className = "agenda-time";
+    time.textContent = event.isAllDay ? t("dayShort") : timeFormatter.format(start);
+
+    const content = document.createElement("div");
+    const subject = document.createElement("div");
+    subject.className = "agenda-subject";
+    subject.textContent = event.subject || t("noSubject");
+    const meta = document.createElement("div");
+    meta.className = "agenda-meta";
+    const bits = [];
+    if (getJoinUrl(event)) bits.push("Teams");
+    if (isRecurringEvent(event)) bits.push(t("recurring"));
+    if (event.location?.displayName) bits.push(event.location.displayName);
+    if (!event.isOrganizer) bits.push(responseLabel(event.responseStatus?.response));
+    meta.textContent = bits.join(" · ");
+    content.append(subject, meta);
+    item.append(time, content);
+    els.agendaList.appendChild(item);
+  }
+}
+
+function attendeeDisplay(attendee) {
+  const email = attendee?.emailAddress || {};
+  const label = email.name ? `${email.name} · ${email.address || ""}` : (email.address || t("unknown"));
+  return `${label} — ${responseLabel(attendee?.status?.response)}`;
+}
+
+function reminderLabel(event) {
+  if (!event?.isReminderOn) return t("reminderNone");
+  const minutes = Number(event?.reminderMinutesBeforeStart || 0);
+  if (minutes === 0) return t("reminderAtStart");
+  if (minutes === 1440) return t("reminderOneDay");
+  return t("reminderMinutes", String(minutes));
+}
+
+function eventIsEditable(event) {
+  return Boolean(event && !event.isCancelled && (event.isOrganizer || !event.organizer?.emailAddress?.address));
+}
+
+function openEvent(eventId) {
+  const event = state.events.find(e => e.id === eventId);
+  if (!event) return;
+  state.selectedEventId = eventId;
+  els.eventTitle.textContent = event.subject || t("noSubject");
+  const eventKinds = [];
+  eventKinds.push(event.isOnlineMeeting || getJoinUrl(event) ? t("teamsMeeting") : t("calendarEvent"));
+  if (isRecurringEvent(event)) eventKinds.push(t("recurring"));
+  els.eventSubline.textContent = event.isCancelled ? t("cancelled") : eventKinds.join(" · ");
+  els.eventTime.textContent = formatEventTime(event) || t("noneDash");
+  els.eventLocation.textContent = event.location?.displayName || t("noneDash");
+  const org = event.organizer?.emailAddress;
+  els.eventOrganizer.textContent = org ? (org.name ? `${org.name} · ${org.address || ""}` : org.address || t("noneDash")) : t("noneDash");
+  els.eventStatus.textContent = event.isOrganizer ? t("organizer") : responseLabel(event.responseStatus?.response);
+  els.eventAttendees.replaceChildren();
+  const attendeeList = event.attendees || [];
+  if (!attendeeList.length) {
+    els.eventAttendees.textContent = t("noneDash");
+  } else {
+    const box = document.createElement("div");
+    box.className = "attendee-status-list";
+    for (const attendee of attendeeList) {
+      const line = document.createElement("div");
+      line.className = "attendee-status-line";
+      line.textContent = attendeeDisplay(attendee);
+      box.appendChild(line);
+    }
+    els.eventAttendees.appendChild(box);
+  }
+  els.eventCategories.textContent = (event.categories || []).join(", ") || t("noneDash");
+  els.eventReminder.textContent = reminderLabel(event);
+  els.eventPreview.textContent = event.body?.content || event.bodyPreview || t("noDescription");
+  els.responseComment.value = "";
+  els.sendResponseCheck.checked = true;
+
+  els.eventLinks.replaceChildren();
+  const joinUrl = getJoinUrl(event);
+  if (joinUrl) els.eventLinks.appendChild(createLink(t("joinTeams"), joinUrl, "teams-link"));
+  if (event.webLink) els.eventLinks.appendChild(createLink(t("openOutlook"), event.webLink));
+
+  const canRespond = !event.isOrganizer && !event.isCancelled;
+  els.responseButtons.classList.toggle("hidden", !canRespond);
+  els.responseCommentWrap.classList.toggle("hidden", !canRespond);
+  els.sendResponseWrap.classList.toggle("hidden", !canRespond);
+  els.eventOwnerButtons.classList.toggle("hidden", !eventIsEditable(event));
+  els.eventDialog.showModal();
+}
+
+async function respondToEvent(response) {
+  const event = currentEvent();
+  if (!event) return;
+  const buttons = els.responseButtons.querySelectorAll("button");
+  buttons.forEach(button => button.disabled = true);
+  try {
+    await api("respondEvent", {
+      eventId: event.id,
+      response,
+      comment: els.responseComment.value.trim(),
+      sendResponse: els.sendResponseCheck.checked
+    });
+    els.eventDialog.close();
+    toast(response === "accept" ? t("toastAccepted") : response === "decline" ? t("toastDeclined") : t("toastTentative"), "success");
+    await loadEvents();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    buttons.forEach(button => button.disabled = false);
+  }
+}
+
+async function openSettings() {
+  state.config = await api("getConfig");
+  state.auth = await api("authStatus");
+  els.clientIdInput.value = state.config.clientId || "";
+  els.tenantInput.value = state.config.tenant || "";
+  els.timeZoneInput.value = state.config.timeZone || "";
+  els.autoSyncMinutesInput.value = String(state.config.autoSyncMinutes ?? 5);
+  els.nativeIntegrationCheck.checked = state.config.nativeIntegration !== false;
+  els.nativeDaysBeforeInput.value = String(state.config.nativeDaysBefore ?? 90);
+  els.nativeDaysAfterInput.value = String(state.config.nativeDaysAfter ?? 365);
+  els.nativeIntegrationBox.classList.remove("hidden");
+  els.redirectUriInput.value = state.auth.redirectUri || "";
+  els.loginStateText.textContent = state.auth.loggedIn
+    ? (state.auth.profile?.userPrincipalName ? t("signedInAs", state.auth.profile.userPrincipalName) : t("signedIn"))
+    : t("notSignedInMicrosoft");
+  const distribution = state.auth.preconfigured
+    ? t("buildInfoInternal", state.auth.version || "2.0.16")
+    : t("buildInfoGithub", state.auth.version || "2.0.16");
+  const mode = state.auth.nativeMode ? t("nativeBuildTitle") : t("standardBuildTitle");
+  const apiState = state.auth.nativeMode
+    ? (state.auth.nativeCapable ? t("nativeApiLoaded") : t("nativeApiNotLoaded"))
+    : "";
+  els.buildInfo.textContent = `${distribution} · ${mode}${apiState ? ` · ${apiState}` : ""}`;
+  els.logoutBtn.disabled = !state.auth.loggedIn;
+  els.fullSyncBtn.disabled = !state.auth.loggedIn || !state.config.selectedCalendarId;
+  await refreshCacheInfo();
+  await refreshNativeStatus();
+  els.settingsDialog.showModal();
+}
+
+async function saveSettings() {
+  const previousClientId = state.config?.clientId || "";
+  const previousTenant = state.config?.tenant || "";
+  const config = await api("saveConfig", {
+    config: {
+      clientId: els.clientIdInput.value,
+      tenant: els.tenantInput.value,
+      timeZone: els.timeZoneInput.value,
+      autoSyncMinutes: els.autoSyncMinutesInput.value,
+      nativeIntegration: els.nativeIntegrationCheck.checked,
+      nativeDaysBefore: els.nativeDaysBeforeInput.value,
+      nativeDaysAfter: els.nativeDaysAfterInput.value
+    }
+  });
+  state.config = config;
+  if ((previousClientId && previousClientId !== config.clientId) || (previousTenant && previousTenant !== config.tenant)) {
+    await api("logout");
+    state.auth = await api("authStatus");
+    updateHeader();
+    toast(t("configChangedRelogin"));
+  } else {
+    if (state.auth?.nativeMode) {
+      if (state.auth?.loggedIn && config.nativeIntegration) {
+        // V2.16: use the proven direct-cache-push path immediately when the
+        // user enables/saves native integration.
+        try { await api("syncNativeCalendars"); } catch (error) { console.warn(error); }
+      } else {
+        try { await api("ensureNativeCalendars", { synchronize: false }); } catch (_) {}
+      }
+    }
+    toast(t("settingsSaved"), "success");
+  }
+  restartAutoSync();
+  await refreshNativeStatus();
+}
+
+async function refreshCacheInfo() {
+  try {
+    const stats = await api("syncCacheStats");
+    const when = stats.lastSyncAt ? dateTimeFormatter.format(new Date(stats.lastSyncAt)) : t("never");
+    els.cacheInfo.textContent = t("cacheStats", [String(stats.windows || 0), String(stats.events || 0), when]);
+  } catch (_) {
+    els.cacheInfo.textContent = t("cacheStatsUnavailable");
+  }
+}
+
+function renderNativeDiagnostics(status) {
+  if (!els.nativeDebugText) return;
+  const diag = status?.diagnostics || {};
+  const auto = status?.autoEnsure || {};
+  const lines = [
+    `build=NATIVE 2.0.16`,
+    `experiment=${status?.available ? "loaded" : "not-loaded"}`,
+    `providerRuntime=${diag.providerModuleLoaded ? "loaded" : "not-loaded"}`,
+    `providerType=${diag.providerType || "-"}`,
+    `calendarStartup=${diag.calendarStartupReady ? "ready" : "not-ready"}`,
+    `managerProvider=${diag.managerProviderRegistered ? "registered" : "not-registered"}`,
+    `uiProvider=${diag.uiProviderRegistered ? "registered" : "not-registered"}`,
+    `tbCalendars=${Number(diag.registeredCalendarCount || 0)}`,
+    `autoEnsure=${auto.attempted ? (auto.ok ? "ok" : "failed") : "not-run"}`,
+    `graphCalendars=${Number(auto.graphCalendarCount || 0)}`,
+    `registered=${Number(auto.registeredCount || 0)}`,
+  ];
+  const autoSync = status?.autoSync || {};
+  lines.push(`autoSyncRunning=${autoSync.running ? "yes" : "no"}`);
+  if (autoSync.timer) lines.push(`autoSyncScheduled=yes`);
+  if (autoSync.scheduledAt) lines.push(`autoSyncScheduledAt=${autoSync.scheduledAt}`);
+  if (autoSync.lastReason) lines.push(`autoSyncReason=${autoSync.lastReason}`);
+  if (autoSync.lastStartedAt) lines.push(`autoSyncStarted=${autoSync.lastStartedAt}`);
+  if (autoSync.lastFinishedAt) lines.push(`autoSyncFinished=${autoSync.lastFinishedAt}`);
+  lines.push(`autoSyncCalendars=${Number(autoSync.lastSynchronized || 0)}`);
+  if (autoSync.lastError) lines.push(`autoSyncError=${autoSync.lastError}`);
+  if (diag.providerLoadError) lines.push(`providerLoadError=${diag.providerLoadError}`);
+  if (diag.providerRegistrationError) lines.push(`providerRegistrationError=${diag.providerRegistrationError}`);
+  if (auto.error) lines.push(`autoEnsureError=${auto.error}`);
+  const sync = diag.syncStats || {};
+  if (sync.lastStartedAt) lines.push(`syncStarted=${sync.lastStartedAt}`);
+  if (sync.lastFinishedAt) lines.push(`syncFinished=${sync.lastFinishedAt}`);
+  lines.push(`syncMode=${sync.mode || "-"}`);
+  lines.push(`syncGraphEvents=${Number(sync.graphEvents || 0)}`);
+  lines.push(`syncCacheWrites=${Number(sync.cacheWrites || 0)}`);
+  lines.push(`syncCacheAdds=${Number(sync.cacheAdds || 0)}`);
+  lines.push(`syncCacheModifies=${Number(sync.cacheModifies || 0)}`);
+  lines.push(`syncCacheDeletes=${Number(sync.cacheDeletes || 0)}`);
+  lines.push(`syncCacheUnchanged=${Number(sync.cacheUnchanged || 0)}`);
+  lines.push(`syncCacheItems=${Number(sync.cacheItems || 0)}`);
+  lines.push(`syncDirectPushes=${Number(sync.directPushes || 0)}`);
+  if (sync.lastGraphCalendarId) lines.push(`syncGraphCalendarId=${sync.lastGraphCalendarId}`);
+  if (sync.message) lines.push(`syncMessage=${sync.message}`);
+  if (sync.error) lines.push(`syncError=${sync.error}`);
+  const viewReload = diag.viewReloadStats || {};
+  lines.push(`viewReloadScheduled=${Number(viewReload.scheduled || 0)}`);
+  lines.push(`viewReloadExecuted=${Number(viewReload.executed || 0)}`);
+  lines.push(`viewReloadViews=${Number(viewReload.refreshedViews || 0)}`);
+  if (viewReload.lastReason) lines.push(`viewReloadReason=${viewReload.lastReason}`);
+  if (viewReload.lastError) lines.push(`viewReloadError=${viewReload.lastError}`);
+  const teamsUi = diag.teamsButtonStats || {};
+  lines.push(`teamsButtonWindows=${Number(teamsUi.injectedWindows || 0)}`);
+  lines.push(`teamsButtonClicks=${Number(teamsUi.clicks || 0)}`);
+  if (teamsUi.lastError) lines.push(`teamsButtonError=${teamsUi.lastError}`);
+  if (diag.lastOperation) lines.push(`lastOperation=${diag.lastOperation}`);
+  if (diag.lastErrorStage) lines.push(`lastErrorStage=${diag.lastErrorStage}`);
+  if (diag.lastError) lines.push(`lastError=${diag.lastError}`);
+  if (Array.isArray(diag.trace) && diag.trace.length) {
+    lines.push("trace:");
+    for (const entry of diag.trace) {
+      lines.push(`  ${entry.ok ? "OK" : "FAIL"} ${entry.stage}${entry.detail ? ` :: ${entry.detail}` : ""}`);
+    }
+  }
+  els.nativeDebugText.textContent = lines.join("\n");
+  if ((auto.attempted && !auto.ok) || diag.lastError) {
+    els.nativeDebugDetails.open = true;
+  }
+}
+
+async function refreshNativeStatus() {
+  const packagedNative = Boolean(state.auth?.nativeMode);
+  els.nativeIntegrationBox.classList.remove("hidden");
+
+  if (!packagedNative) {
+    els.nativeIntegrationCheck.disabled = true;
+    els.nativeDaysBeforeInput.disabled = true;
+    els.nativeDaysAfterInput.disabled = true;
+    els.nativeSyncBtn.disabled = true;
+    els.nativeStatusText.textContent = t("nativeStatusStandardBuild");
+    const warning = document.getElementById("nativeExperimentWarning");
+    if (warning) warning.classList.add("hidden");
+    return;
+  }
+
+  const warning = document.getElementById("nativeExperimentWarning");
+  if (warning) warning.classList.remove("hidden");
+  els.nativeStatusText.textContent = t("nativeStatusProbing");
+
+  try {
+    // V2.16 deliberately performs the first Experiment access only here,
+    // after the normal STANDARD UI/background are already alive.
+    const status = await api("nativeStatus");
+    renderNativeDiagnostics(status);
+    state.auth.nativeCapable = Boolean(status.available);
+    state.auth.nativeProbed = Boolean(status.probed);
+    state.auth.nativeProbeError = status.bridgeError || "";
+    updateBuildModeBanner();
+
+    els.nativeIntegrationCheck.disabled = !status.available;
+    els.nativeDaysBeforeInput.disabled = !status.available;
+    els.nativeDaysAfterInput.disabled = !status.available;
+    els.nativeSyncBtn.disabled = !status.available || !status.enabled || !status.loggedIn;
+
+    const diag = status.diagnostics || {};
+    const bridgeError = status.bridgeError || (!status.available ? diag.providerLoadError : "");
+    if (!status.available) {
+      els.nativeStatusText.textContent = bridgeError
+        ? t("nativeBridgeFailed", bridgeError)
+        : t("nativeStatusApiNotLoaded");
+      return;
+    }
+
+    const moduleState = diag.providerModuleLoaded
+      ? ` · ${t("nativeProviderModuleLoaded")}`
+      : diag.providerLoadError
+        ? ` · ${t("nativeProviderModuleFailed", diag.providerLoadError)}`
+        : ` · ${t("nativeProviderModuleNotLoaded")}`;
+    const registry = ` · ${t("nativeRegistryState", [
+      diag.managerProviderRegistered ? t("yes") : t("no"),
+      diag.uiProviderRegistered ? t("yes") : t("no"),
+      String(diag.registeredCalendarCount || 0)
+    ])}`;
+    const ensureInfo = status.autoEnsure?.attempted
+      ? status.autoEnsure?.ok
+        ? ` · ${t("nativeAutoEnsureOk", [
+            String(status.autoEnsure.graphCalendarCount || 0),
+            String(status.autoEnsure.registeredCount || 0)
+          ])}`
+        : ` · ${t("nativeAutoEnsureFailed", status.autoEnsure?.error || t("unknownError"))}`
+      : "";
+
+    if (!status.enabled) {
+      els.nativeStatusText.textContent = `${t("nativeStatusDisabled")}${moduleState}${registry}${ensureInfo}`;
+    } else if (!status.loggedIn) {
+      els.nativeStatusText.textContent = `${t("nativeStatusNotSignedIn")}${moduleState}${registry}${ensureInfo}`;
+    } else {
+      const names = (status.calendars || []).map(calendar => calendar.name).filter(Boolean);
+      const base = t("nativeStatusActive", String(status.calendars?.length || 0));
+      els.nativeStatusText.textContent = `${base}${moduleState}${registry}${ensureInfo}${names.length ? ` · ${names.join(", ")}` : ""}`;
+    }
+  } catch (error) {
+    state.auth.nativeCapable = false;
+    state.auth.nativeProbed = true;
+    state.auth.nativeProbeError = error.message || String(error);
+    updateBuildModeBanner();
+    els.nativeIntegrationCheck.disabled = true;
+    els.nativeDaysBeforeInput.disabled = true;
+    els.nativeDaysAfterInput.disabled = true;
+    els.nativeSyncBtn.disabled = true;
+    els.nativeStatusText.textContent = t("nativeBridgeFailed", error.message || String(error));
+    if (els.nativeDebugText) {
+      els.nativeDebugText.textContent = `build=NATIVE 2.0.16\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
+      if (els.nativeDebugDetails) els.nativeDebugDetails.open = true;
+    }
+  }
+}
+
+async function syncNativeNow() {
+  els.nativeSyncBtn.disabled = true;
+  try {
+    const result = await api("syncNativeCalendars");
+    toast(t("nativeSyncComplete", String(result.synchronized || 0)), "success");
+    await refreshNativeStatus();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    await refreshNativeStatus();
+  }
+}
+
+async function forceFullSync() {
+  if (!state.auth?.loggedIn || !state.config?.selectedCalendarId) return;
+  if (els.settingsDialog.open) els.settingsDialog.close();
+  await loadEvents({ forceFull: true });
+}
+
+async function clearOfflineCache() {
+  if (!confirm(t("confirmClearCache"))) return;
+  try {
+    await api("clearSyncCache");
+    await refreshCacheInfo();
+    toast(t("cacheCleared"), "success");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+async function doLogin() {
+  try {
+    state.config = await api("getConfig");
+    if (!state.config.clientId || !state.config.tenant) {
+      toast(t("enterConfigFirst"), "error");
+      if (!els.settingsDialog.open) await openSettings();
+      return;
+    }
+    els.loginBtn.disabled = true;
+    const profile = await api("login");
+    state.auth = await api("authStatus");
+    updateHeader();
+    toast(t("loginSuccess", profile?.displayName ? `: ${profile.displayName}` : ""), "success");
+    if (els.settingsDialog.open) els.settingsDialog.close();
+    await loadCalendarsAndEvents();
+    await refreshNativeStatus();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    els.loginBtn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  try {
+    await api("logout");
+    state.auth = await api("authStatus");
+    state.events = [];
+    state.calendars = [];
+    state.sync = null;
+    stopAutoSync();
+    updateHeader();
+    if (els.settingsDialog.open) els.settingsDialog.close();
+    showWelcome();
+    toast(t("logoutSuccess"), "success");
+  } catch (error) {
+    toast(error.message, "error");
+  }
+}
+
+function toDateTimeLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const h = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${h}:${min}`;
+}
+
+function dateOnly(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+
+function weekdayGraph(date) {
+  return ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"][date.getDay()];
+}
+
+function normalizeEditorTimes() {
+  let start = els.newStart.value;
+  let end = els.newEnd.value;
+  if (els.newAllDay.checked) {
+    const startDate = new Date(start);
+    let endDate = new Date(end);
+    startDate.setHours(0,0,0,0);
+    endDate.setHours(0,0,0,0);
+    if (endDate <= startDate) endDate = new Date(startDate.getTime() + 86400000);
+    start = `${dateOnly(startDate)}T00:00:00`;
+    end = `${dateOnly(endDate)}T00:00:00`;
+  }
+  return { start, end };
+}
+
+function updateRecurrenceVisibility() {
+  const type = els.newRecurrenceType.value;
+  const enabled = type !== "none" && !state.editingEventId;
+  els.newRecurrenceInterval.disabled = !enabled;
+  els.newRecurrenceEndType.disabled = !enabled;
+  const endType = els.newRecurrenceEndType.value;
+  els.recurrenceEndDateWrap.classList.toggle("hidden", !enabled || endType !== "endDate");
+  els.recurrenceCountWrap.classList.toggle("hidden", !enabled || endType !== "numbered");
+}
+
+function buildRecurrencePayload(startValue) {
+  const type = els.newRecurrenceType.value;
+  if (type === "none" || state.editingEventId) return null;
+  const start = new Date(startValue);
+  if (Number.isNaN(start.getTime())) return null;
+  const interval = Math.max(1, Math.min(99, Number(els.newRecurrenceInterval.value) || 1));
+  let pattern;
+  if (type === "daily") pattern = { type: "daily", interval };
+  if (type === "weekly") pattern = { type: "weekly", interval, daysOfWeek: [weekdayGraph(start)], firstDayOfWeek: "monday" };
+  if (type === "monthly") pattern = { type: "absoluteMonthly", interval, dayOfMonth: start.getDate() };
+  if (type === "yearly") pattern = { type: "absoluteYearly", interval, dayOfMonth: start.getDate(), month: start.getMonth() + 1 };
+  const range = {
+    type: els.newRecurrenceEndType.value || "noEnd",
+    startDate: dateOnly(start),
+    recurrenceTimeZone: state.config?.timeZone || "W. Europe Standard Time"
+  };
+  if (range.type === "endDate") range.endDate = els.newRecurrenceEndDate.value || dateOnly(new Date(start.getTime() + 90*86400000));
+  if (range.type === "numbered") range.numberOfOccurrences = Math.max(1, Math.min(999, Number(els.newRecurrenceCount.value) || 10));
+  return { pattern, range };
+}
+
+function resetEventEditor() {
+  state.editingEventId = null;
+  let start = NATIVE_TEAMS_POPUP && NATIVE_TEAMS_START ? new Date(NATIVE_TEAMS_START) : new Date();
+  if (Number.isNaN(start.getTime())) start = new Date();
+  start.setSeconds(0, 0);
+  if (!(NATIVE_TEAMS_POPUP && NATIVE_TEAMS_START)) {
+    start.setMinutes(start.getMinutes() < 30 ? 30 : 0);
+    if (start.getMinutes() === 0) start.setHours(start.getHours() + 1);
+  }
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  els.newSubject.value = "";
+  els.newStart.value = toDateTimeLocal(start);
+  els.newEnd.value = toDateTimeLocal(end);
+  els.newAllDay.checked = false;
+  els.newAttendees.value = "";
+  hideAttendeeSuggestions();
+  els.newLocation.value = "";
+  els.newBody.value = "";
+  els.newTeams.checked = true;
+  els.newTeams.disabled = false;
+  els.newReminder.value = "15";
+  els.newShowAs.value = "busy";
+  els.newSensitivity.value = "normal";
+  els.newCategories.value = "";
+  els.newRecurrenceType.value = "none";
+  els.newRecurrenceType.disabled = false;
+  els.newRecurrenceInterval.value = "1";
+  els.newRecurrenceEndType.value = "noEnd";
+  els.newRecurrenceCount.value = "10";
+  els.newRecurrenceEndDate.value = dateOnly(new Date(start.getTime() + 90*86400000));
+  els.recurrenceEditHint.classList.add("hidden");
+  els.availabilityResults.classList.add("hidden");
+  els.availabilityResults.replaceChildren();
+  els.newEventTitleText.textContent = t("newEventTitle");
+  els.newEventSubtitleText.textContent = t("newEventSubtitle");
+  els.saveEventBtn.textContent = t("createEvent");
+  updateRecurrenceVisibility();
+}
+
+function openNewEvent() {
+  resetEventEditor();
+  const calendar = state.calendars.find(c => c.id === state.config.selectedCalendarId);
+  els.newEventInfo.textContent = calendar ? t("calendarInfo", `${calendar.name}${calendar.isShared ? ` · ${t("sharedShort")}` : ""}`) : "";
+  els.newEventDialog.showModal();
+  if (NATIVE_TEAMS_POPUP) window.setTimeout(() => fitNativeTeamsPopup(), 0);
+}
+
+function openEditEvent() {
+  const event = currentEvent();
+  if (!event || !eventIsEditable(event)) return;
+  state.editingEventId = event.id;
+  els.newSubject.value = event.subject || "";
+  els.newStart.value = toDateTimeLocal(eventStart(event) || new Date());
+  els.newEnd.value = toDateTimeLocal(eventEnd(event) || new Date(Date.now()+3600000));
+  els.newAllDay.checked = Boolean(event.isAllDay);
+  els.newAttendees.value = (event.attendees || []).map(a => a?.emailAddress?.address).filter(Boolean).join("; ");
+  els.newLocation.value = event.location?.displayName || "";
+  els.newBody.value = event.body?.content || event.bodyPreview || "";
+  els.newTeams.checked = Boolean(event.isOnlineMeeting || getJoinUrl(event));
+  els.newTeams.disabled = true;
+  els.newReminder.value = event.isReminderOn ? String(event.reminderMinutesBeforeStart ?? 15) : "";
+  if (![...els.newReminder.options].some(o => o.value === els.newReminder.value) && event.isReminderOn) {
+    const option = document.createElement("option");
+    option.value = els.newReminder.value;
+    option.textContent = t("reminderMinutes", els.newReminder.value);
+    els.newReminder.appendChild(option);
+  }
+  els.newShowAs.value = event.showAs || "busy";
+  els.newSensitivity.value = event.sensitivity || "normal";
+  els.newCategories.value = (event.categories || []).join("; ");
+  els.newRecurrenceType.value = "none";
+  els.newRecurrenceType.disabled = true;
+  els.recurrenceEditHint.classList.toggle("hidden", !isRecurringEvent(event));
+  els.availabilityResults.classList.add("hidden");
+  els.newEventTitleText.textContent = t("editEventTitle");
+  els.newEventSubtitleText.textContent = t("editEventSubtitle");
+  els.saveEventBtn.textContent = t("saveChanges");
+  const calendar = state.calendars.find(c => c.id === state.config.selectedCalendarId);
+  els.newEventInfo.textContent = calendar ? t("calendarInfo", calendar.name) : "";
+  updateRecurrenceVisibility();
+  if (els.eventDialog.open) els.eventDialog.close();
+  els.newEventDialog.showModal();
+  if (NATIVE_TEAMS_POPUP) window.setTimeout(() => fitNativeTeamsPopup(), 0);
+}
+
+function editorPayload() {
+  const attendees = els.newAttendees.value.split(/[;,]/).map(v => v.trim()).filter(Boolean);
+  const categories = els.newCategories.value.split(/[;,]/).map(v => v.trim()).filter(Boolean);
+  const times = normalizeEditorTimes();
+  return {
+    calendarId: state.config.selectedCalendarId,
+    subject: els.newSubject.value,
+    start: times.start,
+    end: times.end,
+    allDay: els.newAllDay.checked,
+    attendees,
+    location: els.newLocation.value,
+    body: els.newBody.value,
+    teams: els.newTeams.checked,
+    reminderMinutes: els.newReminder.value === "" ? null : Number(els.newReminder.value),
+    showAs: els.newShowAs.value,
+    sensitivity: els.newSensitivity.value,
+    categories,
+    recurrence: buildRecurrencePayload(times.start)
+  };
+}
+
+async function saveEventEditor() {
+  const submit = els.saveEventBtn;
+  submit.disabled = true;
+  try {
+    const payload = editorPayload();
+    if (state.editingEventId) {
+      payload.eventId = state.editingEventId;
+      payload.includeRecurrence = false;
+      await api("updateEvent", { payload });
+      toast(t("eventUpdated"), "success");
+    } else {
+      await api("createEvent", { payload });
+      toast(payload.teams ? t("teamsCreated") : t("eventCreated"), "success");
+    }
+    els.newEventDialog.close();
+    state.editingEventId = null;
+    if (NATIVE_TEAMS_POPUP) {
+      window.setTimeout(() => window.close(), 80);
+      return;
+    }
+    await loadEvents();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function deleteCurrentEvent() {
+  const event = currentEvent();
+  if (!event || !eventIsEditable(event) || !confirm(t("confirmDeleteEvent"))) return;
+  els.deleteEventBtn.disabled = true;
+  try {
+    await api("deleteEvent", { eventId: event.id, calendarId: state.config.selectedCalendarId });
+    els.eventDialog.close();
+    toast(t("eventDeleted"), "success");
+    await loadEvents();
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    els.deleteEventBtn.disabled = false;
+  }
+}
+
+function availabilityLabel(view) {
+  const text = String(view || "");
+  if (!text || /^0+$/.test(text)) return { label: t("availabilityFree"), free: true };
+  if (text.includes("3")) return { label: t("availabilityOof"), free: false };
+  if (text.includes("2")) return { label: t("availabilityBusy"), free: false };
+  if (text.includes("1")) return { label: t("availabilityTentative"), free: false };
+  if (text.includes("4")) return { label: t("availabilityWorkingElsewhere"), free: false };
+  return { label: t("availabilityUnknown"), free: false };
+}
+
+async function checkAvailability() {
+  const schedules = els.newAttendees.value.split(/[;,]/).map(v => v.trim()).filter(v => v.includes("@"));
+  if (!schedules.length) {
+    toast(t("availabilityNeedAttendees"), "error");
+    return;
+  }
+  const times = normalizeEditorTimes();
+  els.checkAvailabilityBtn.disabled = true;
+  try {
+    const result = await api("getSchedule", { schedules, start: times.start, end: times.end, interval: 15 });
+    els.availabilityResults.replaceChildren();
+    for (const schedule of result.value || []) {
+      const status = availabilityLabel(schedule.availabilityView);
+      const row = document.createElement("div");
+      row.className = `availability-row ${status.free ? "availability-free" : "availability-busy"}`;
+      const addr = document.createElement("span");
+      addr.textContent = schedule.scheduleId || "?";
+      const label = document.createElement("strong");
+      label.textContent = status.label;
+      row.append(addr, label);
+      els.availabilityResults.appendChild(row);
+    }
+    els.availabilityResults.classList.toggle("hidden", !(result.value || []).length);
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    els.checkAvailabilityBtn.disabled = false;
+  }
+}
+
+async function copyRedirect() {
+  try {
+    await navigator.clipboard.writeText(els.redirectUriInput.value);
+    toast(t("redirectCopied"), "success");
+  } catch (_) {
+    els.redirectUriInput.select();
+    document.execCommand("copy");
+    toast(t("redirectCopied"), "success");
+  }
+}
+
+function bindEvents() {
+  els.settingsBtn.addEventListener("click", openSettings);
+  els.welcomeSettingsBtn.addEventListener("click", openSettings);
+  els.welcomeLoginBtn.addEventListener("click", doLogin);
+  els.loginBtn.addEventListener("click", async () => {
+    await saveSettings();
+    await doLogin();
+  });
+  els.logoutBtn.addEventListener("click", doLogout);
+  els.copyRedirectBtn.addEventListener("click", copyRedirect);
+  els.fullSyncBtn.addEventListener("click", forceFullSync);
+  els.clearCacheBtn.addEventListener("click", clearOfflineCache);
+  els.nativeSyncBtn.addEventListener("click", syncNativeNow);
+
+  els.settingsForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    try {
+      await saveSettings();
+      els.settingsDialog.close();
+      state.auth = await api("authStatus");
+      updateHeader();
+      if (state.auth.loggedIn) await loadCalendarsAndEvents(); else showWelcome();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+
+  els.prevBtn.addEventListener("click", async () => {
+    state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
+    await loadEvents();
+  });
+  els.nextBtn.addEventListener("click", async () => {
+    state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
+    await loadEvents();
+  });
+  els.todayBtn.addEventListener("click", async () => {
+    const now = new Date();
+    state.cursor = new Date(now.getFullYear(), now.getMonth(), 1);
+    await loadEvents();
+  });
+  els.refreshBtn.addEventListener("click", () => loadEvents());
+  els.calendarSelect.addEventListener("change", async () => {
+    state.config.selectedCalendarId = els.calendarSelect.value;
+    await api("saveConfig", { config: { selectedCalendarId: els.calendarSelect.value } });
+    await loadEvents();
+  });
+
+  els.newEventBtn.addEventListener("click", openNewEvent);
+  els.newEventForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    await saveEventEditor();
+  });
+  els.editEventBtn.addEventListener("click", openEditEvent);
+  els.deleteEventBtn.addEventListener("click", deleteCurrentEvent);
+  els.checkAvailabilityBtn.addEventListener("click", checkAvailability);
+  els.newAttendees.addEventListener("input", scheduleAttendeeSearch);
+  els.newAttendees.addEventListener("keydown", handleAttendeeSuggestionKeydown);
+  els.newAttendees.addEventListener("blur", () => window.setTimeout(hideAttendeeSuggestions, 140));
+  els.newRecurrenceType.addEventListener("change", updateRecurrenceVisibility);
+  els.newRecurrenceEndType.addEventListener("change", updateRecurrenceVisibility);
+  els.newAllDay.addEventListener("change", () => {
+    if (!els.newAllDay.checked) return;
+    const start = new Date(els.newStart.value);
+    let end = new Date(els.newEnd.value);
+    if (!Number.isNaN(start.getTime())) {
+      start.setHours(0,0,0,0);
+      els.newStart.value = toDateTimeLocal(start);
+    }
+    if (!Number.isNaN(end.getTime())) {
+      end.setHours(0,0,0,0);
+      if (!Number.isNaN(start.getTime()) && end <= start) end = new Date(start.getTime()+86400000);
+      els.newEnd.value = toDateTimeLocal(end);
+    }
+  });
+
+  document.querySelectorAll("[data-close]").forEach(button => {
+    button.addEventListener("click", () => {
+      const dialog = $(button.dataset.close);
+      if (dialog?.open) dialog.close();
+    });
+  });
+
+  els.responseButtons.querySelectorAll("[data-response]").forEach(button => {
+    button.addEventListener("click", () => respondToEvent(button.dataset.response));
+  });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !state.auth?.loggedIn || state.loading) return;
+  const minutes = Number(state.config?.autoSyncMinutes || 0);
+  const last = Number(state.sync?.lastSyncAt || 0);
+  if (minutes > 0 && Date.now() - last >= minutes * 60 * 1000) loadEvents({ quiet: true });
+});
+
+async function init() {
+  applyI18n();
+  if (NATIVE_TEAMS_POPUP) {
+    document.body.classList.add("native-teams-popup");
+    document.title = t(NATIVE_EDIT_EVENT_ID ? "nativeEventEditorPopupTitle" : "nativeTeamsMeetingPopupTitle");
+  }
+  for (const node of document.querySelectorAll("[id]")) els[node.id] = node;
+  bindEvents();
+  if (NATIVE_TEAMS_POPUP) {
+    const closePopupWindow = () => {
+      if (!state.loading) window.setTimeout(() => window.close(), 40);
+    };
+    els.newEventDialog.addEventListener("close", closePopupWindow);
+    els.eventDialog.addEventListener("close", closePopupWindow);
+  }
+  try {
+    await loadState();
+    updateBuildModeBanner();
+    if (NATIVE_TEAMS_POPUP && state.auth?.loggedIn && state.calendars.length) {
+      const preferred = state.calendars.find(calendar =>
+        calendar.id === NATIVE_TEAMS_CALENDAR_ID && calendar.canEdit
+      ) || state.calendars.find(calendar => calendar.isDefault && calendar.canEdit)
+        || state.calendars.find(calendar => calendar.canEdit);
+      if (preferred) {
+        // Popup-only selection: do not overwrite the user's persistent Space selection.
+        state.config.selectedCalendarId = preferred.id;
+        renderCalendarSelector();
+        if (NATIVE_EDIT_EVENT_ID) {
+          const event = await api("getEvent", { eventId: NATIVE_EDIT_EVENT_ID, calendarId: preferred.id });
+          state.events = event ? [event] : [];
+          state.selectedEventId = event?.id || null;
+          if (!event) throw new Error(t("eventNotFound"));
+          if (eventIsEditable(event)) openEditEvent();
+          else {
+            openEvent(event.id);
+            if (NATIVE_TEAMS_POPUP) window.setTimeout(() => fitNativeTeamsPopup(), 0);
+          }
+        } else {
+          openNewEvent();
+        }
+      } else {
+        toast(t("noCalendars"), "error");
+      }
+    }
+  } catch (error) {
+    showWelcome();
+    toast(error.message, "error");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);

@@ -1,0 +1,102 @@
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  width: 410px;
+  max-width: 100vw;
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 13px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+}
+h1 { margin: 0; font-size: 16px; }
+h2 { margin: 4px 0 8px; font-size: 16px; line-height: 1.25; }
+.muted { opacity: .7; font-size: 12px; }
+main { padding: 12px; }
+.panel { display: block; }
+.hidden { display: none !important; }
+.centered { text-align: center; padding: 18px 6px; }
+.spinner {
+  width: 24px;
+  height: 24px;
+  margin: 0 auto 8px;
+  border: 3px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-top-color: CanvasText;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.event-head { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; }
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  opacity: .8;
+}
+.icon-btn, button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  padding: 7px 10px;
+  background: ButtonFace;
+  color: ButtonText;
+}
+.icon-btn { padding: 4px 8px; font-size: 17px; }
+button:disabled { opacity: .5; cursor: default; }
+.primary { font-weight: 600; }
+.danger { font-weight: 600; }
+.ghost { background: transparent; }
+.details { margin: 12px 0; }
+.details > div {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+}
+dt { opacity: .68; }
+dd { margin: 0; overflow-wrap: anywhere; }
+.info-box {
+  margin: 10px 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, CanvasText 7%, transparent);
+  line-height: 1.35;
+}
+.info-box.ok { border-left: 3px solid color-mix(in srgb, CanvasText 55%, transparent); }
+.info-box.warn { border-left: 3px solid color-mix(in srgb, CanvasText 35%, transparent); }
+.field { display: grid; gap: 5px; margin-top: 10px; }
+textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 54px;
+  font: inherit;
+  padding: 7px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: Field;
+  color: FieldText;
+}
+.check-row { display: flex; align-items: center; gap: 7px; margin: 9px 0; }
+.button-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.response-row { justify-content: flex-end; }
+.link-button { text-decoration: none; display: inline-flex; align-items: center; }
+.error-panel { line-height: 1.4; }
+footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 9px 12px 12px;
+  border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+}

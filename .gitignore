@@ -1,0 +1,11 @@
+# Local build/test output
+__pycache__/
+*.pyc
+node_modules/
+source/*/release/
+release-ci/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

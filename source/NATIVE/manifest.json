@@ -1,0 +1,64 @@
+{
+  "manifest_version": 2,
+  "name": "__MSG_extName__",
+  "description": "__MSG_extDescription__",
+  "version": "2.0.19",
+  "author": "Jens Kowalsky",
+  "default_locale": "de",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "m365-calendar@jenskowalsky.invalid",
+      "strict_min_version": "128.0"
+    }
+  },
+  "icons": {
+    "16": "icons/jk-16.png",
+    "32": "icons/jk-32.png",
+    "48": "icons/jk-48.png",
+    "64": "icons/jk-64.png",
+    "96": "icons/jk-96.png",
+    "128": "icons/jk-128.png"
+  },
+  "permissions": [
+    "storage",
+    "identity",
+    "addressBooks",
+    "messagesRead",
+    "https://login.microsoftonline.com/*",
+    "https://graph.microsoft.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "config/build-config.js",
+      "lib/ical.js",
+      "lib/sync.js",
+      "lib/native.js",
+      "background.js"
+    ]
+  },
+  "message_display_action": {
+    "default_title": "__MSG_inviteActionTitle__",
+    "default_label": "__MSG_inviteActionLabel__",
+    "default_popup": "invite/invite.html",
+    "default_icon": {
+      "16": "icons/jk-16.png",
+      "32": "icons/jk-32.png"
+    }
+  },
+  "experiment_apis": {
+    "nativeCalendar": {
+      "schema": "experiments/nativeCalendar/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/nativeCalendar/api.js",
+        "paths": [
+          [
+            "nativeCalendar"
+          ]
+        ]
+      }
+    }
+  }
+}
