@@ -2682,7 +2682,7 @@ function _m365NativeCreateProviderRuntime() {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.32//EN",
+      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.33//EN",
       "CALSCALE:GREGORIAN",
       `X-WR-CALNAME:${safeString(calendar?.name || "Microsoft 365").replace(/[\\;,\r\n]/g, " ")}`,
       ...eventBlocks,

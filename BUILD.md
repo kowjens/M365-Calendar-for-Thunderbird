@@ -1,45 +1,32 @@
-# Build
-
-**Author:** Jens Kowalsky
+# Build and validation
 
 ## Requirements
 
-- Python 3.9+ for the repository build helper
-- Node.js for contract/regression tests
+- Python 3.13 recommended (3.9+ should work for the helper scripts)
+- Node.js 22+ for JavaScript syntax/regression tests
 - Thunderbird for manual integration testing
 
-## Build both XPIs
+No npm install step and no generated/minified JavaScript are required.
+
+## Validate
+
+```bash
+python tools/run_tests.py
+python tools/neutrality_check.py
+python tools/atn_check.py
+```
+
+## Build
 
 ```bash
 python tools/build_xpi.py --all
 ```
 
-Outputs are written to `release/`.
+The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. This makes reviewer/source reproduction easier.
 
-## Build one edition
+Outputs:
 
-```bash
-python tools/build_xpi.py --variant STANDARD
-python tools/build_xpi.py --variant NATIVE
-```
+- `release/M365_Thunderbird_Calendar_V2.33_NATIVE.xpi`
+- `release/M365_Thunderbird_Calendar_V2.33_STANDARD.xpi`
 
-## Windows / PowerShell
-
-Each source tree also contains its original PowerShell builder:
-
-```powershell
-cd source\STANDARD
-.\build_xpi.ps1
-
-cd ..\NATIVE
-.\build_xpi.ps1
-```
-
-## Run tests
-
-```bash
-python tools/run_tests.py
-python tools/neutrality_check.py
-```
-
-The XPI must contain `manifest.json` at the archive root.
+The NATIVE XPI is the package intended for addons.thunderbird.net. It contains the Thunderbird Experiment API needed for native Calendar integration.

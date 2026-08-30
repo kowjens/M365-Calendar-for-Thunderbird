@@ -1,19 +1,15 @@
 # Security Policy
 
-**Maintainer:** Jens Kowalsky
+## Supported release
+
+Security fixes are applied to the current public release. Because the NATIVE edition uses a Thunderbird Experiment API, compatibility is intentionally bounded and revalidated for new Thunderbird major versions.
 
 ## Sensitive data
 
-Never commit:
+Do not include OAuth tokens, authorization codes, private Thunderbird profile data, private calendar diagnostic exports or client secrets in public GitHub issues.
 
-- OAuth tokens or authorization codes
-- client secrets
-- tenant-specific private configuration
-- Thunderbird profile data
-- private calendar exports or contact data
+The add-on uses OAuth Authorization Code + PKCE and does not require a Microsoft client secret.
 
-This extension uses OAuth Authorization Code + PKCE and must not contain a Client Secret.
+## Reporting a vulnerability
 
-## Reporting
-
-Please report security-sensitive findings privately to the repository maintainer instead of publishing exploit details in a public issue.
+Use GitHub's private vulnerability reporting feature for this repository if it is enabled. Otherwise contact the maintainer through the GitHub profile without publishing exploit details in a public issue.

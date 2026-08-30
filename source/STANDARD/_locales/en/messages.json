@@ -1,9 +1,9 @@
 {
   "extName": {
-    "message": "M365 Calendar for Thunderbird"
+    "message": "M365 Calendar for Thunderbird (Standard)"
   },
   "extDescription": {
-    "message": "Microsoft 365 / Teams calendar integration for Thunderbird with native calendar views, Microsoft Graph, OAuth2/PKCE and offline cache."
+    "message": "Microsoft 365 / Teams calendar integration for Thunderbird with Microsoft Graph, OAuth2/PKCE and the M365 Space, without the native-calendar Experiment API."
   },
   "spaceTitle": {
     "message": "Microsoft 365"

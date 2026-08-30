@@ -1,5 +1,18 @@
 # Changelog
 
+## V2.33
+
+- ATN/publication readiness release; synchronization behavior remains based on V2.32.
+
+- Stable public NATIVE/STANDARD add-on IDs replace the temporary `.invalid` ID.
+
+- Added `sensitiveDataUpload`, NATIVE `strict_max_version: 154.*`, deterministic builds and ATN preflight validation.
+
+- Updated GitHub Actions and corrected the public author/branding regression test.
+
+- Documented the Thunderbird Multiweek rendering symptom confirmed by V2.32 native range diagnostics.
+
+
 ## V2.32
 
 - Added a read-only **calendar diagnostic ZIP export** for NATIVE builds with a selectable date range.

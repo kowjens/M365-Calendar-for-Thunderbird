@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.32
+# User Guide – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / NATIVE**
 
@@ -48,7 +48,7 @@ If an error occurs:
 
 The block includes fields such as `build`, `experiment`, `providerRuntime`, `tbCalendars`, `graphCalendars`, `syncCacheItems`, possible `syncError` lines, and a `trace`.
 
-### Diagnostic ZIP for missing native events (V2.32)
+### Diagnostic ZIP for missing native events (V2.32+)
 
 Open **Microsoft 365 → ⚙ Settings → Native Thunderbird calendar integration** and use **Calendar diagnostic export**. Choose a range that includes the missing event plus at least one recurring instance before and after it, then select **Create diagnostic ZIP**.
 
@@ -145,5 +145,5 @@ Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address b
 The Microsoft 365 Space supports **Month**, **Week**, **Day**, and **Agenda** views. The selected view is remembered.
 
 
-### V2.32 native range diagnostics
+### V2.32+ native range diagnostics
 `native_range_queries.json` records the actual `cache.sqlite` range queries using Thunderbird event/occurrence filter masks. It is intended to distinguish “row exists in cache” from “row is returned to the calendar view”.

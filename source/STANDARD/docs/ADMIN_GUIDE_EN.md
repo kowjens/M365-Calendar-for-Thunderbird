@@ -1,4 +1,4 @@
-# Administrator Guide – M365 Calendar for Thunderbird V2.32
+# Administrator Guide – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / STANDARD**
 
@@ -92,7 +92,7 @@ Select **Save**, then run **Microsoft Login**.
 - **STANDARD**: Microsoft 365 Space, Graph calendar, Teams events and invitation functions; **no** native Thunderbird calendar provider and no privileged Experiment API.
 - **NATIVE**: additionally exposes M365 calendars in Thunderbird's built-in Calendar view and therefore uses a privileged Thunderbird Experiment API.
 
-All variants use the same extension ID and are **alternatives**, not side-by-side installations.
+The public NATIVE and STANDARD editions use separate stable add-on IDs. The NATIVE edition intended for addons.thunderbird.net uses `m365-calendar-public@35pwr.com`; STANDARD uses `m365-calendar-standard@35pwr.com`.
 
 ## 6. STANDARD-build limitation
 
@@ -106,6 +106,10 @@ The STANDARD build intentionally has **no native Thunderbird calendar provider**
 - Grant permissions according to least privilege.
 - If `Calendars.ReadWrite.Shared` is added later, perform a fresh interactive **Microsoft Login** so the new scope is included in the token.
 
+
+## Microsoft Graph data-transfer permission
+
+The public manifest declares `sensitiveDataUpload` because calendar/account information is transmitted to the hardcoded Microsoft identity and Graph endpoints as an essential part of the configured Microsoft 365 connection. No project-operated server receives this data. See `PRIVACY.md` in the repository / the full privacy text on addons.thunderbird.net.
 
 ## New Thunderbird permission in V2.17: `addressBooks`
 

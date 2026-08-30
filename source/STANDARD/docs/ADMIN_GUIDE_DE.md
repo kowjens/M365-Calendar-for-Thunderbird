@@ -1,4 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.32
+# Administratoranleitung – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / STANDARD**
 
@@ -92,7 +92,7 @@ Anschließend **Speichern** und **Microsoft Login** ausführen.
 - **STANDARD**: Microsoft-365-Space, Graph-Kalender, Teams-Termine und Einladungsfunktionen; **keine** native Thunderbird-Kalenderintegration und keine privilegierte Experiment-API.
 - **NATIVE**: zusätzlich echte M365-Kalender in Thunderbirds normaler Kalenderansicht. Dafür verwendet die Erweiterung eine privilegierte Thunderbird Experiment API.
 
-Die vier Builds haben dieselbe Extension-ID und sind **Alternativen**, nicht parallel zu installieren.
+Die öffentlichen NATIVE- und STANDARD-Editionen verwenden getrennte stabile Add-on-IDs. Die für addons.thunderbird.net vorgesehene NATIVE-Edition nutzt `m365-calendar-public@35pwr.com`; STANDARD nutzt `m365-calendar-standard@35pwr.com`.
 
 ## 6. Hinweis zum STANDARD-Build
 
@@ -106,6 +106,10 @@ Der STANDARD-Build besitzt absichtlich **keine native Thunderbird-Kalenderintegr
 - Berechtigungen nach dem Least-Privilege-Prinzip vergeben.
 - Nach nachträglichem Hinzufügen von `Calendars.ReadWrite.Shared` einmal einen neuen interaktiven **Microsoft Login** ausführen, damit der Scope im Token enthalten ist.
 
+
+## Datenübertragung zu Microsoft Graph
+
+Das öffentliche Manifest deklariert `sensitiveDataUpload`, weil Kalender-/Kontodaten für die konfigurierte Microsoft-365-Verbindung an die fest definierten Microsoft-Identity- und Graph-Endpunkte übertragen werden. Es existiert kein Projekt-Backend, das diese Daten empfängt. Details stehen in `PRIVACY.md` bzw. im vollständigen Datenschutztext auf addons.thunderbird.net.
 
 ## Neue Thunderbird-Berechtigung in V2.17: `addressBooks`
 

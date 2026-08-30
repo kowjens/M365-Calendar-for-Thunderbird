@@ -1,4 +1,4 @@
-# Administrator Guide – M365 Calendar for Thunderbird V2.32
+# Administrator Guide – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / NATIVE**
 
@@ -92,7 +92,7 @@ Select **Save**, then run **Microsoft Login**.
 - **STANDARD**: Microsoft 365 Space, Graph calendar, Teams events and invitation functions; **no** native Thunderbird calendar provider and no privileged Experiment API.
 - **NATIVE**: additionally exposes M365 calendars in Thunderbird's built-in Calendar view and therefore uses a privileged Thunderbird Experiment API.
 
-All variants use the same extension ID and are **alternatives**, not side-by-side installations.
+The public NATIVE and STANDARD editions use separate stable add-on IDs. The NATIVE edition intended for addons.thunderbird.net uses `m365-calendar-public@35pwr.com`; STANDARD uses `m365-calendar-standard@35pwr.com`.
 
 ## 6. Native calendar integration and diagnostics
 
@@ -118,7 +118,7 @@ trace:
 
 Send the block unchanged to the administrator/support contact when possible.
 
-### Diagnostic export (V2.32)
+### Diagnostic export (V2.32+)
 
 The NATIVE build can create a **read-only diagnostic export**. It reads the selected Graph `calendarView` live, then captures the Space cache and the actual Thunderbird provider cache. It deliberately does **not** call `syncNativeCalendars()`.
 
@@ -132,7 +132,7 @@ V2.17 adds a **Teams meeting** button and a **New Teams meeting** date/time cont
 
 Teams events are created through Microsoft Graph with `isOnlineMeeting=true` and `onlineMeetingProvider=teamsForBusiness`.
 
-Microsoft reference: {MS_GRAPH_TEAMS}
+Microsoft reference: https://learn.microsoft.com/en-us/graph/api/user-post-events
 
 ## 8. Security / OAuth notes
 
@@ -142,6 +142,10 @@ Microsoft reference: {MS_GRAPH_TEAMS}
 - Grant permissions according to least privilege.
 - If `Calendars.ReadWrite.Shared` is added later, perform a fresh interactive **Microsoft Login** so the new scope is included in the token.
 
+
+## Microsoft Graph data-transfer permission
+
+The public manifest declares `sensitiveDataUpload` because calendar/account information is transmitted to the hardcoded Microsoft identity and Graph endpoints as an essential part of the configured Microsoft 365 connection. No project-operated server receives this data. See `PRIVACY.md` in the repository / the full privacy text on addons.thunderbird.net.
 
 ## New Thunderbird permission in V2.17: `addressBooks`
 
@@ -193,5 +197,5 @@ Live attendee search returns as soon as `contacts.quickSearch()` yields a match.
 Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address books can be selected under **Address books for attendee suggestions**. The selection limits live attendee lookup and can exclude large legacy/collected address books.
 
 
-### V2.32 native range diagnostics
+### V2.32+ native range diagnostics
 `native_range_queries.json` records the actual `cache.sqlite` range queries using Thunderbird event/occurrence filter masks. It is intended to distinguish “row exists in cache” from “row is returned to the calendar view”.

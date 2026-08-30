@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.32
+# User Guide – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / STANDARD**
 

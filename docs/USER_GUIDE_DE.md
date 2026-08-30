@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.28
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.33
 
 Build: **GITHUB / NATIVE**
 
@@ -48,7 +48,7 @@ Bei einem Fehler:
 
 Der Block enthält z. B. `build`, `experiment`, `providerRuntime`, `tbCalendars`, `graphCalendars`, `syncCacheItems`, mögliche `syncError`-Zeilen und einen `trace`.
 
-### Diagnose-ZIP für fehlende native Termine (V2.32)
+### Diagnose-ZIP für fehlende native Termine (V2.33)
 
 Unter **Microsoft 365 → ⚙ Einstellungen → Native Thunderbird-Kalenderintegration** steht **Kalender-Diagnoseexport** zur Verfügung. Wähle einen Zeitraum, der den fehlenden Termin sowie mindestens einen Serientermin davor und danach enthält, und klicke **Diagnose-ZIP erstellen**.
 

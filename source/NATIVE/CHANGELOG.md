@@ -1,3 +1,9 @@
+# V2.33
+
+- Public/ATN readiness release; synchronization behavior remains based on V2.32.
+- Stable public add-on ID, `sensitiveDataUpload`, CI/ATN preflight and deterministic packaging.
+- GitHub branding regression test corrected for `Jens Kowalsky, 3-5 Power Electronics GmbH`.
+
 # V2.32
 
 - Added NATIVE calendar diagnostic ZIP export with Graph/Space/native-cache/ICS comparison; diagnostic collection does not trigger native synchronization.

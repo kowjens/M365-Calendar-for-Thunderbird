@@ -1,6 +1,6 @@
 "use strict";
 
-// Generated V2.32 build defaults. Client IDs and tenant identifiers are public OAuth configuration, not secrets.
+// Generated V2.33 build defaults. Client IDs and tenant identifiers are public OAuth configuration, not secrets.
 var M365_BUILD_DEFAULTS = Object.freeze({
   clientId: "",
   tenant: "",
