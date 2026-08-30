@@ -1,0 +1,10 @@
+"use strict";
+const fs=require("fs"),path=require("path"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments/nativeCalendar/api.js"),"utf8");
+assert.ok(api.includes('case "imip.identity.disabled":\n          return false;'),"real M365 provider must expose Thunderbird mail-identity row");
+assert.ok(api.includes('case "imip.identity":'),"provider must resolve selected Thunderbird identity object");
+assert.ok(api.includes('case "imip.account":'),"provider must resolve Thunderbird mail account");
+assert.ok(api.includes("identityForEmail"),"initial identity should be matchable from M365 organizer address");
+assert.ok(api.includes("calendarDetails:"),"diagnostics must expose actual provider type/identity state when UI row is missing");
+console.log("native calendar mail identity V2.22: OK");

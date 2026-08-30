@@ -1,8 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.19
-
-**Autor:** Jens Kowalsky  
-**Öffentliche GitHub-Ausgabe:** keine vorkonfigurierte Client-ID und kein Tenant.
-
+# Administratoranleitung – M365 Calendar for Thunderbird V2.28
 
 Build: **GITHUB / NATIVE**
 
@@ -122,6 +118,14 @@ trace:
 
 Diesen Block möglichst unverändert an Support/Administrator senden.
 
+### Diagnoseexport (V2.32)
+
+Der NATIVE-Build kann einen **read-only Diagnoseexport** erzeugen. Der ausgewählte Graph-`calendarView` wird live gelesen; anschließend werden Space-Cache und der tatsächlich vorhandene Thunderbird-Provider-Cache ausgelesen. Es wird dabei absichtlich **kein** `syncNativeCalendars()` aufgerufen.
+
+Für Serienprobleme sind vor allem `comparison.csv` und `series_comparison.json` relevant. Der primäre Abgleich erfolgt über die Graph Event-ID; als Fallback wird `iCalUId + start` verwendet. `native_cache.json` enthält zusätzlich `graphType`, `seriesMasterId`, `mappingVersion`, `recurrenceId`, `parentItemId` und die gespeicherte VEVENT-Darstellung.
+
+Sicherheitsrelevant: Access-/Refresh-Tokens werden nicht exportiert. Kalenderinhalt und Teilnehmeradressen sind enthalten.
+
 ## 7. Teams-Meeting-Button im nativen Thunderbird-Kalender
 
 V2.17 stellt in der normalen Thunderbird-Kalenderansicht einen **Teams-Meeting**-Button und einen Rechtsklick-Eintrag **Neues Teams-Meeting** bereit. Der Button öffnet in einem kompakten Fenster denselben M365-Termin-Editor, der auch im Microsoft-365-Space verwendet wird. Dadurch existiert nur eine gemeinsame Graph-Erstellungslogik.
@@ -160,4 +164,30 @@ Im NATIVE-Build öffnet ein **Doppelklick auf einen Termin eines M365-Kalenders*
 
 Die M365-Terminfenster verwenden jetzt einen festen Kopf- und Fußbereich. Nur der mittlere Inhalt scrollt. Dadurch bleiben Schaltflächen wie **Teams beitreten**, **Bearbeiten**, **Ablehnen**, **Vorbehalt** und **Annehmen** auch bei langen Meeting-Informationen oder auf kleineren Laptop-Displays erreichbar. Lange Teams-/Meeting-URLs werden umgebrochen und erzeugen keinen eigenen horizontalen Scrollbereich mehr.
 
-> **Hinweis zur öffentlichen GitHub-Version:** Sie verwendet die Add-on-ID `m365-calendar@jenskowalsky.invalid`. Deshalb unterscheidet sich ihre OAuth Redirect URI von privaten/internen Builds. In Entra immer exakt die URI eintragen, die das installierte Add-on anzeigt.
+## V2.21: Adressbuch, Kalender-Einstellungen und Anmeldung
+
+- **Teilnehmer-Autovervollständigung (NATIVE):** Zusätzlich zur WebExtension-Adressbuch-API durchsucht der NATIVE-Build jetzt direkt Thunderbirds eigene Adressbuchverwaltung. Damit werden lokale, CardDAV- und – soweit Thunderbird sie bereitstellt – Betriebssystem-/weitere Adressbücher über denselben Datenbestand gesucht, den Thunderbird selbst verwendet.
+- **Kalender-Einstellungen bleiben erhalten:** Farbe, aktiviert/deaktiviert, Sichtbarkeit, Alarm-Unterdrückung und die zugeordnete E-Mail-Identität werden als Benutzer-Einstellungen gespeichert und nach einem Thunderbird-Neustart wiederhergestellt. Eine Graph-Synchronisation überschreibt die vom Benutzer gewählte Farbe nicht mehr.
+- **Microsoft-Anmeldung robuster:** Temporäre Token-/Netzwerkfehler löschen die gespeicherte Anmeldung nicht mehr. Wenn nötig versucht das Add-on zunächst eine stille Wiederanmeldung über die bereits vorhandene Microsoft-Sitzung und verlangt nur dann eine interaktive Anmeldung, wenn Microsoft sie wirklich fordert.
+- **E-Mail-Identität im nativen Kalender (NATIVE):** Der Provider löst jetzt Thunderbirds `imip.identity` korrekt auf. Wenn ein Thunderbird-Mailkonto dieselbe E-Mail-Adresse wie das angemeldete M365-Konto verwendet, wird diese Identität beim ersten Anlegen automatisch vorausgewählt. Die Auswahl kann in den Kalender-Eigenschaften geändert werden und bleibt gespeichert.
+
+## 9. V2.23 – Native-Zeitkonvertierung und Reload-Härtung
+
+V2.23 korrigiert zwei native Thunderbird-Pfade:
+
+1. Zeitstempel werden zunächst als absoluter JavaScript-Zeitpunkt erhalten und anschließend in Thunderbird-UTC umgerechnet. Dadurch wird der lokale UTC-Offset nicht doppelt angewendet.
+2. Thunderbirds Provider-Replay und der direkte Graph-Cache-Push werden pro Graph-Kalender serialisiert. `resetLog()` löst keinen zusätzlichen `onLoad`/Replay mehr aus und der Cache-Abgleich arbeitet mit gespeicherten Parent-Events.
+
+Nach dem Update einmal **Native Kalender synchronisieren**, damit Cache-Einträge aus V2.22 mit der neuen Zeitumwandlung neu geschrieben werden.
+
+
+## 10. V2.24 – Read-after-write und schnelle Adresssuche
+
+V2.24 hält direkte Graph-Schreibergebnisse für 120 Sekunden als Schutzobjekte vor. Ein unmittelbar folgender `calendarView`-Abruf darf einen frisch angelegten/geänderten Termin nicht durch einen älteren Snapshot löschen; Löschungen werden analog als Tombstone geschützt. Sobald `calendarView` denselben `changeKey` bzw. das Verschwinden bestätigt, wird der Schutz entfernt.
+
+Die Live-Teilnehmersuche beendet sich bereits nach einem Treffer aus `contacts.quickSearch()`. Die vollständige Enumeration bleibt für Diagnose/Fallback verfügbar.
+
+
+## V2.27: Adressbücher für Teilnehmer-Vorschläge
+
+In **Microsoft 365 → Zahnrad → Einstellungen** können unter **Adressbücher für Teilnehmer-Vorschläge** ein oder mehrere Thunderbird-Adressbücher ausgewählt werden. Die Auswahl begrenzt die Live-Vorschläge im Teilnehmerfeld und kann große alte/gesammelte Adressbücher von der Suche ausschließen.

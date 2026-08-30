@@ -1,8 +1,8 @@
 "use strict";
 
-const VERSION = "2.0.19";
-const CONFIG_SCHEMA_VERSION = 203;
-const SYNC_STORE_KEY = "syncCacheV203";
+const VERSION = "2.0.32";
+const CONFIG_SCHEMA_VERSION = 205;
+const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
 const SYNC_EVENT_SELECT = "id,subject,start,end,location,organizer,attendees,responseStatus,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,webLink,isOrganizer,type,showAs,sensitivity,body,bodyPreview,isCancelled,isAllDay,iCalUId,uid,seriesMasterId,originalStart,originalStartTimeZone,originalEndTimeZone,recurrence,isReminderOn,reminderMinutesBeforeStart,categories,hideAttendees,lastModifiedDateTime,changeKey";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -14,12 +14,14 @@ const DEFAULT_CONFIG = {
   tenant: String(BUILD_DEFAULTS.tenant || ""),
   timeZone: "W. Europe Standard Time",
   selectedCalendarId: "",
+  spaceViewMode: "month",
   daysBefore: 14,
   daysAfter: 45,
   autoSyncMinutes: 5,
   nativeIntegration: true,
   nativeDaysBefore: 90,
   nativeDaysAfter: 365,
+  contactAddressBookIds: ["*"],
   configSchemaVersion: CONFIG_SCHEMA_VERSION
 };
 
@@ -30,10 +32,11 @@ const BASE_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Calend
 const SCOPES = [...BASE_SCOPES, "Calendars.ReadWrite.Shared"];
 let spaceId = null;
 
-// V2.16: The native Experiment API is deliberately lazy. Merely installing a
-// NATIVE XPI must not touch browser.nativeCalendar during background startup.
-// This keeps the proven STANDARD UI/Graph path alive even if Thunderbird
-// rejects or cannot load the privileged provider bridge.
+// The native Experiment bridge remains failure-isolated from the STANDARD
+// Graph/UI path. V2.24 performs a delayed provider activation after background
+// startup (rather than synchronously during script evaluation), then the normal
+// native auto-sync follows. This restores persisted provider calendars early
+// without letting a provider failure break the Microsoft 365 Space.
 const NATIVE_PACKAGE = BUILD_DEFAULTS.nativeMode !== false;
 const nativeBridgeState = {
   probed: false,
@@ -43,8 +46,224 @@ const nativeBridgeState = {
   listenersBound: false
 };
 
+// V2.24 read-after-write guard. Microsoft Graph event POST/PATCH/DELETE can be
+// immediately followed by calendarView reads from both the WebExtension sync
+// and Thunderbird's provider replay. If that view is briefly behind the direct
+// event endpoint, a just-created item could otherwise be removed again from
+// the native cache. Keep the direct write result authoritative until
+// calendarView confirms the same changeKey (or the deletion disappears).
+const NATIVE_WRITE_GUARD_TTL_MS = 120000;
+const recentNativeWriteGuards = new Map();
+
+function nativeWriteGuardBucket(calendarId, create = false) {
+  const key = String(calendarId || "");
+  if (!key) return null;
+  let bucket = recentNativeWriteGuards.get(key) || null;
+  if (!bucket && create) {
+    bucket = new Map();
+    recentNativeWriteGuards.set(key, bucket);
+  }
+  return bucket;
+}
+
+function rememberNativeUpsert(calendarId, event) {
+  const id = String(event?.id || "");
+  const bucket = nativeWriteGuardBucket(calendarId, true);
+  if (!bucket || !id) return;
+  bucket.set(id, {
+    kind: "upsert",
+    event,
+    expiresAt: Date.now() + NATIVE_WRITE_GUARD_TTL_MS
+  });
+}
+
+function rememberNativeDelete(calendarId, eventId) {
+  const id = String(eventId || "");
+  const bucket = nativeWriteGuardBucket(calendarId, true);
+  if (!bucket || !id) return;
+  bucket.set(id, {
+    kind: "delete",
+    event: null,
+    expiresAt: Date.now() + NATIVE_WRITE_GUARD_TTL_MS
+  });
+}
+
+function applyRecentNativeWriteGuards(calendarId, events) {
+  const bucket = nativeWriteGuardBucket(calendarId, false);
+  if (!bucket?.size) return { events: [...(events || [])], protectedUpserts: 0, protectedDeletes: 0, remaining: 0 };
+
+  const now = Date.now();
+  const byId = new Map((events || []).filter(event => event?.id).map(event => [String(event.id), event]));
+  let protectedUpserts = 0;
+  let protectedDeletes = 0;
+
+  for (const [id, guard] of [...bucket.entries()]) {
+    if (!guard || Number(guard.expiresAt || 0) <= now) {
+      bucket.delete(id);
+      continue;
+    }
+    const serverEvent = byId.get(id) || null;
+    if (guard.kind === "delete") {
+      if (!serverEvent) {
+        // calendarView has caught up with the deletion.
+        bucket.delete(id);
+      } else {
+        // Ignore a stale calendarView row for a deletion we already confirmed.
+        byId.delete(id);
+        protectedDeletes += 1;
+      }
+      continue;
+    }
+
+    const guardedEvent = guard.event || null;
+    if (!guardedEvent) {
+      bucket.delete(id);
+      continue;
+    }
+    const guardedChangeKey = String(guardedEvent?.changeKey || "");
+    const serverChangeKey = String(serverEvent?.changeKey || "");
+    const guardedModified = String(guardedEvent?.lastModifiedDateTime || "");
+    const serverModified = String(serverEvent?.lastModifiedDateTime || "");
+    const guardedModifiedMs = guardedModified ? Date.parse(guardedModified) : NaN;
+    const serverModifiedMs = serverModified ? Date.parse(serverModified) : NaN;
+    const confirmed = Boolean(serverEvent) && (
+      (guardedChangeKey && serverChangeKey && guardedChangeKey === serverChangeKey) ||
+      (Number.isFinite(guardedModifiedMs) && Number.isFinite(serverModifiedMs) && serverModifiedMs >= guardedModifiedMs)
+    );
+    if (confirmed) {
+      bucket.delete(id);
+      continue;
+    }
+
+    // The direct event endpoint is newer than the current calendarView snapshot.
+    byId.set(id, guardedEvent);
+    protectedUpserts += 1;
+  }
+
+  if (!bucket.size) recentNativeWriteGuards.delete(String(calendarId || ""));
+  return {
+    events: [...byId.values()],
+    protectedUpserts,
+    protectedDeletes,
+    remaining: bucket.size
+  };
+}
+
+
+// V2.16: Native calendar synchronization is automatic.  The timer is
+// deliberately delayed so Thunderbird's calendar service can finish startup.
+// All failures remain isolated from the normal STANDARD/Graph UI.
+const nativeAutoSyncState = {
+  timer: null,
+  running: false,
+  queuedReason: "",
+  scheduledAt: "",
+  lastReason: "",
+  lastStartedAt: "",
+  lastFinishedAt: "",
+  lastError: "",
+  lastSynchronized: 0
+};
+
+function scheduleNativeAutoSync(reason = "automatic", delayMs = 2500) {
+  if (!NATIVE_PACKAGE) return;
+  nativeAutoSyncState.queuedReason = String(reason || "automatic");
+  nativeAutoSyncState.scheduledAt = new Date().toISOString();
+  // If a sync is already running, keep exactly one follow-up request.
+  if (nativeAutoSyncState.running) return;
+  if (nativeAutoSyncState.timer) clearTimeout(nativeAutoSyncState.timer);
+  nativeAutoSyncState.timer = setTimeout(() => {
+    nativeAutoSyncState.timer = null;
+    const queuedReason = nativeAutoSyncState.queuedReason || "automatic";
+    nativeAutoSyncState.queuedReason = "";
+    runNativeAutoSync(queuedReason).catch(error => {
+      console.error("M365 automatic native calendar synchronization failed", error);
+    });
+  }, Math.max(0, Number(delayMs) || 0));
+}
+
+async function runNativeAutoSync(reason = "automatic") {
+  if (!NATIVE_PACKAGE) return { skipped: "standard-build" };
+  if (nativeAutoSyncState.running) {
+    nativeAutoSyncState.queuedReason = String(reason || "automatic");
+    return { skipped: "already-running" };
+  }
+
+  nativeAutoSyncState.running = true;
+  nativeAutoSyncState.lastReason = String(reason || "automatic");
+  nativeAutoSyncState.lastStartedAt = new Date().toISOString();
+  nativeAutoSyncState.lastFinishedAt = "";
+  nativeAutoSyncState.lastError = "";
+  try {
+    const config = await getConfig();
+    if (!config.nativeIntegration) return { skipped: "native-disabled" };
+
+    // V2.24: activate the Thunderbird provider independently of Microsoft
+    // authentication. Persisted native calendars are loaded by Thunderbird
+    // before this WebExtension runs and temporarily become dummy calendars if
+    // our dynamic provider is not registered yet. Registering it here swaps
+    // those dummies back to the real provider without deleting their registry
+    // preferences (colour, visibility, disabled state, mail identity, ...).
+    const nativeApi = await probeNativeApi({ retry: true });
+    if (nativeApi?.activate) {
+      await nativeApi.activate();
+    }
+
+    const status = await authStatus();
+    if (!status.loggedIn) return { skipped: "not-signed-in-provider-active" };
+    const result = await syncNativeCalendars();
+    nativeAutoSyncState.lastSynchronized = Number(result?.synchronized || 0);
+    return result;
+  } catch (error) {
+    nativeAutoSyncState.lastError = error?.message || String(error);
+    throw error;
+  } finally {
+    nativeAutoSyncState.running = false;
+    nativeAutoSyncState.lastFinishedAt = new Date().toISOString();
+    if (nativeAutoSyncState.queuedReason) {
+      const followUpReason = nativeAutoSyncState.queuedReason;
+      nativeAutoSyncState.queuedReason = "";
+      scheduleNativeAutoSync(followUpReason, 750);
+    }
+  }
+}
+
 function nativeApiIfLoaded() {
   return nativeBridgeState.available ? nativeBridgeState.api : null;
+}
+
+let nativeProviderStartupTimer = null;
+const nativeProviderStartupState = {
+  scheduled: false,
+  attempted: false,
+  activated: false,
+  lastReason: "",
+  lastError: ""
+};
+
+function scheduleNativeProviderActivation(reason = "background-start", delayMs = 1200) {
+  if (!NATIVE_PACKAGE) return;
+  nativeProviderStartupState.scheduled = true;
+  nativeProviderStartupState.lastReason = String(reason || "background-start");
+  if (nativeProviderStartupTimer) clearTimeout(nativeProviderStartupTimer);
+  nativeProviderStartupTimer = setTimeout(async () => {
+    nativeProviderStartupTimer = null;
+    nativeProviderStartupState.scheduled = false;
+    nativeProviderStartupState.attempted = true;
+    nativeProviderStartupState.lastError = "";
+    try {
+      const config = await getConfig();
+      if (!config.nativeIntegration) return;
+      const api = await probeNativeApi({ retry: true });
+      if (!api?.activate) throw new Error("nativeCalendar.activate unavailable");
+      await api.activate();
+      nativeProviderStartupState.activated = true;
+    } catch (error) {
+      nativeProviderStartupState.activated = false;
+      nativeProviderStartupState.lastError = error?.message || String(error);
+      console.warn("M365 native provider startup activation failed", error);
+    }
+  }, Math.max(0, Number(delayMs) || 0));
 }
 
 function bindNativeBridgeEvents(api) {
@@ -53,6 +272,12 @@ function bindNativeBridgeEvents(api) {
   api.onItemCreated.addListener(nativeCreateHandler);
   api.onItemUpdated.addListener(nativeUpdateHandler);
   api.onItemRemoved.addListener(nativeRemoveHandler);
+  if (api.onTeamsMeetingRequested?.addListener) {
+    api.onTeamsMeetingRequested.addListener(openNativeTeamsMeetingPopup);
+  }
+  if (api.onEventEditRequested?.addListener) {
+    api.onEventEditRequested.addListener(openNativeTeamsMeetingPopup);
+  }
   nativeBridgeState.listenersBound = true;
 }
 
@@ -106,6 +331,7 @@ function normalizeConfig(input = {}) {
   clean.tenant = String(clean.tenant || "").trim();
   clean.timeZone = String(clean.timeZone || "").trim() || DEFAULT_CONFIG.timeZone;
   clean.selectedCalendarId = String(clean.selectedCalendarId || "");
+  clean.spaceViewMode = ["month", "week", "day", "agenda"].includes(String(clean.spaceViewMode || "")) ? String(clean.spaceViewMode) : "month";
   clean.daysBefore = Math.max(0, Math.min(365, Number(clean.daysBefore) || DEFAULT_CONFIG.daysBefore));
   clean.daysAfter = Math.max(1, Math.min(365, Number(clean.daysAfter) || DEFAULT_CONFIG.daysAfter));
   const autoSync = Number(clean.autoSyncMinutes);
@@ -113,6 +339,10 @@ function normalizeConfig(input = {}) {
   clean.nativeIntegration = clean.nativeIntegration !== false;
   clean.nativeDaysBefore = Math.max(0, Math.min(730, Number(clean.nativeDaysBefore) || DEFAULT_CONFIG.nativeDaysBefore));
   clean.nativeDaysAfter = Math.max(1, Math.min(1095, Number(clean.nativeDaysAfter) || DEFAULT_CONFIG.nativeDaysAfter));
+  clean.contactAddressBookIds = Array.isArray(clean.contactAddressBookIds)
+    ? [...new Set(clean.contactAddressBookIds.map(value => String(value || "").trim()).filter(Boolean))]
+    : ["*"];
+  if (clean.contactAddressBookIds.includes("*")) clean.contactAddressBookIds = ["*"];
   clean.configSchemaVersion = CONFIG_SCHEMA_VERSION;
   return clean;
 }
@@ -163,7 +393,10 @@ async function saveAuth(tokenResponse) {
     accessToken: tokenResponse.access_token,
     refreshToken: tokenResponse.refresh_token || old?.refreshToken || "",
     expiresAt: Date.now() + Math.max(60, Number(tokenResponse.expires_in || 3600)) * 1000,
-    scope: tokenResponse.scope || ""
+    scope: tokenResponse.scope || old?.scope || "",
+    requiresInteraction: false,
+    lastAuthError: "",
+    lastRefreshAt: new Date().toISOString()
   };
   await browser.storage.local.set({ auth });
   return auth;
@@ -189,14 +422,39 @@ async function parseJsonResponse(response) {
   return data;
 }
 
-async function login() {
+let silentAuthPromise = null;
+let lastSilentAuthError = "";
+let lastSilentAuthAttemptAt = 0;
+
+function authErrorCode(error) {
+  return String(error?.data?.error || "").trim().toLowerCase();
+}
+
+function errorNeedsInteraction(error) {
+  const code = authErrorCode(error);
+  if (["invalid_grant", "interaction_required", "login_required", "account_selection_required", "consent_required"].includes(code)) {
+    return true;
+  }
+  return /AADSTS(?:50058|50076|50079|50158|65001|70000|700082)/i.test(String(error?.message || ""));
+}
+
+async function markAuthNeedsInteraction(error) {
+  const auth = await getAuth();
+  if (!auth) return;
+  await browser.storage.local.set({
+    auth: {
+      ...auth,
+      accessToken: "",
+      requiresInteraction: true,
+      lastAuthError: String(error?.message || error || t("errorNoValidLogin"))
+    }
+  });
+}
+
+async function authorizeToken({ prompt = "select_account", interactive = true, loginHint = "" } = {}) {
   const config = await getConfig();
-  if (!config.clientId) {
-    throw new Error(t("errorClientIdMissing"));
-  }
-  if (!config.tenant) {
-    throw new Error(t("errorTenantMissing"));
-  }
+  if (!config.clientId) throw new Error(t("errorClientIdMissing"));
+  if (!config.tenant) throw new Error(t("errorTenantMissing"));
 
   const redirectUri = browser.identity.getRedirectURL("oauth2");
   const verifier = randomBase64Url(64);
@@ -211,11 +469,19 @@ async function login() {
   authorize.searchParams.set("state", state);
   authorize.searchParams.set("code_challenge", challenge);
   authorize.searchParams.set("code_challenge_method", "S256");
-  authorize.searchParams.set("prompt", "select_account");
+  if (prompt) authorize.searchParams.set("prompt", prompt);
+  let hint = String(loginHint || "").trim();
+  if (!hint) {
+    try {
+      const stored = await browser.storage.local.get("profile");
+      hint = String(stored?.profile?.mail || stored?.profile?.userPrincipalName || "").trim();
+    } catch (_) {}
+  }
+  if (hint) authorize.searchParams.set("login_hint", hint);
 
   const redirectResult = await browser.identity.launchWebAuthFlow({
     url: authorize.toString(),
-    interactive: true
+    interactive: Boolean(interactive)
   });
   if (!redirectResult) throw new Error(t("errorLoginCancelled"));
 
@@ -223,7 +489,11 @@ async function login() {
   const returnedState = resultUrl.searchParams.get("state");
   if (returnedState !== state) throw new Error(t("errorStateMismatch"));
   const authError = resultUrl.searchParams.get("error_description") || resultUrl.searchParams.get("error");
-  if (authError) throw new Error(authError);
+  if (authError) {
+    const error = new Error(authError);
+    error.authRequired = true;
+    throw error;
+  }
   const code = resultUrl.searchParams.get("code");
   if (!code) throw new Error(t("errorNoAuthCode"));
 
@@ -240,50 +510,118 @@ async function login() {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body
   });
-  const tokenResponse = await parseJsonResponse(response);
-  await saveAuth(tokenResponse);
+  return saveAuth(await parseJsonResponse(response));
+}
+
+async function loadAndStoreProfile() {
   const profile = await graphRequest("/me?$select=displayName,mail,userPrincipalName,id");
   await browser.storage.local.set({ profile });
+  return profile;
+}
+
+async function silentReauthenticate() {
+  if (silentAuthPromise) return silentAuthPromise;
+  silentAuthPromise = (async () => {
+    lastSilentAuthError = "";
+    lastSilentAuthAttemptAt = Date.now();
+    try {
+      await authorizeToken({ prompt: "none", interactive: false });
+      try { await loadAndStoreProfile(); } catch (_) {}
+      return await getAuth();
+    } catch (error) {
+      lastSilentAuthError = error?.message || String(error);
+      return null;
+    } finally {
+      silentAuthPromise = null;
+    }
+  })();
+  return silentAuthPromise;
+}
+
+async function login() {
+  // V2.24: a click on Login is also a recovery action. First try the existing
+  // Microsoft browser session without interaction; only show account selection
+  // if silent SSO really cannot recover the token set.
+  let recovered = null;
+  try { recovered = await silentReauthenticate(); } catch (_) {}
+  if (!recovered?.accessToken) {
+    await authorizeToken({ prompt: "select_account", interactive: true });
+  }
+  const profile = await loadAndStoreProfile();
   try {
-    await ensureNativeCalendars({ synchronize: true });
+    await runNativeAutoSync("login-success");
   } catch (error) {
     console.error("M365 native calendar setup after login failed", error);
   }
   return profile;
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken({ allowSilent = true } = {}) {
   const config = await getConfig();
   const auth = await getAuth();
-  if (!auth?.refreshToken) throw new Error(t("errorNoValidLogin"));
   if (!config.clientId) throw new Error(t("errorClientIdShort"));
   if (!config.tenant) throw new Error(t("errorTenantShort"));
 
-  const body = new URLSearchParams({
-    client_id: config.clientId,
-    grant_type: "refresh_token",
-    refresh_token: auth.refreshToken,
-    scope: String(auth.scope || BASE_SCOPES.join(" "))
-  });
-  const response = await fetch(tokenEndpoint(config.tenant), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body
-  });
+  if (!auth?.refreshToken) {
+    if (allowSilent) {
+      const recovered = await silentReauthenticate();
+      if (recovered?.accessToken) return recovered;
+    }
+    const error = new Error(t("errorNoValidLogin"));
+    error.status = 401;
+    error.authRequired = true;
+    throw error;
+  }
+
   try {
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      grant_type: "refresh_token",
+      refresh_token: auth.refreshToken,
+      scope: String(auth.scope || BASE_SCOPES.join(" "))
+    });
+    const response = await fetch(tokenEndpoint(config.tenant), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
+    });
     return await saveAuth(await parseJsonResponse(response));
   } catch (error) {
-    await clearAuth();
-    const wrapped = new Error(t("errorLoginExpired", error.message));
-    wrapped.status = Number(error?.status || 0);
-    wrapped.data = error?.data || null;
-    throw wrapped;
+    // A refresh-token rejection can often be recovered without user input,
+    // because the Microsoft login session is still alive in the auth window.
+    // Try prompt=none before showing the user as disconnected.
+    if (allowSilent && errorNeedsInteraction(error)) {
+      const recovered = await silentReauthenticate();
+      if (recovered?.accessToken) return recovered;
+      await markAuthNeedsInteraction(error);
+      const wrapped = new Error(t("errorLoginExpired", error.message));
+      wrapped.status = 401;
+      wrapped.data = error?.data || null;
+      wrapped.authRequired = true;
+      throw wrapped;
+    }
+
+    // Do NOT delete a still-useful refresh token on transient network/server
+    // errors. V2.19 cleared auth here and could make Thunderbird look logged
+    // out even though the Microsoft browser session was still valid.
+    error.authRequired = false;
+    throw error;
   }
 }
 
 async function getAccessToken() {
   let auth = await getAuth();
-  if (!auth?.accessToken) throw new Error(t("errorNotSignedIn"));
+  if (!auth?.accessToken && !auth?.refreshToken) {
+    const recovered = await silentReauthenticate();
+    if (recovered?.accessToken) auth = recovered;
+  }
+  if (!auth?.accessToken && auth?.refreshToken) auth = await refreshAccessToken();
+  if (!auth?.accessToken) {
+    const error = new Error(t("errorNotSignedIn"));
+    error.status = 401;
+    error.authRequired = true;
+    throw error;
+  }
   if (Date.now() > Number(auth.expiresAt || 0) - 90_000) auth = await refreshAccessToken();
   return auth.accessToken;
 }
@@ -326,13 +664,29 @@ async function graphRequest(pathOrUrl, options = {}, retry = true) {
 }
 
 async function authStatus() {
-  const [auth, config, stored] = await Promise.all([
+  let [auth, config, stored] = await Promise.all([
     getAuth(),
     getConfig(),
     browser.storage.local.get("profile")
   ]);
+
+  // Recover a missing/interaction-marked token set from an existing Microsoft
+  // browser session before presenting the user as disconnected. Throttle failed
+  // silent attempts so opening the M365 space cannot create an auth loop.
+  const hasToken = Boolean(auth?.accessToken || auth?.refreshToken);
+  if (config.clientId && config.tenant && (!hasToken || auth?.requiresInteraction) && Date.now() - lastSilentAuthAttemptAt > 60_000) {
+    const recovered = await silentReauthenticate();
+    if (recovered?.accessToken || recovered?.refreshToken) {
+      auth = recovered;
+      stored = await browser.storage.local.get("profile");
+    }
+  }
+
   return {
-    loggedIn: Boolean(auth?.accessToken || auth?.refreshToken),
+    loggedIn: Boolean(auth?.accessToken || auth?.refreshToken) && !Boolean(auth?.requiresInteraction),
+    requiresInteraction: Boolean(auth?.requiresInteraction),
+    lastAuthError: String(auth?.lastAuthError || ""),
+    lastSilentAuthError: String(lastSilentAuthError || ""),
     profile: stored.profile || null,
     configured: Boolean(config.clientId && config.tenant),
     preconfigured: Boolean(BUILD_DEFAULTS.clientId && BUILD_DEFAULTS.tenant),
@@ -532,7 +886,7 @@ async function hydrateEventDetails(calendarId, events) {
       id: String(index + 1),
       method: "GET",
       url: `/me/calendars/${encodeId(calendarId)}/events/${encodeId(entry.event.id)}?$select=${select}`,
-      headers: { Prefer: 'outlook.body-content-type="text"' }
+      headers: { Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"' }
     }));
 
     try {
@@ -545,7 +899,16 @@ async function hydrateEventDetails(calendarId, events) {
         const response = responses.get(String(i + 1));
         const entry = chunk[i];
         if (response && Number(response.status) >= 200 && Number(response.status) < 300 && response.body) {
-          output[entry.index] = { ...entry.event, ...response.body };
+          output[entry.index] = {
+            ...entry.event,
+            ...response.body,
+            // V2.24 timezone correctness: calendarView was explicitly requested
+            // in UTC. Detail hydration is only for sparse metadata and must not
+            // replace those already-normalized start/end values with a second
+            // representation that can be interpreted again by the local TZ.
+            start: entry.event?.start || response.body?.start,
+            end: entry.event?.end || response.body?.end
+          };
           hydrated += 1;
         } else {
           unresolved += 1;
@@ -558,10 +921,15 @@ async function hydrateEventDetails(calendarId, events) {
         try {
           const detail = await graphRequest(
             `/me/calendars/${encodeId(calendarId)}/events/${encodeId(entry.event.id)}?$select=${select}`,
-            { headers: { Prefer: 'outlook.body-content-type="text"' } }
+            { headers: { Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"' } }
           );
           if (detail) {
-            output[entry.index] = { ...entry.event, ...detail };
+            output[entry.index] = {
+              ...entry.event,
+              ...detail,
+              start: entry.event?.start || detail?.start,
+              end: entry.event?.end || detail?.end
+            };
             hydrated += 1;
           } else {
             unresolved += 1;
@@ -747,6 +1115,44 @@ function decodeVCardValue(value = "") {
     .trim();
 }
 
+const contactSearchDiagnosticsState = {
+  at: "",
+  query: "",
+  permission: "unknown",
+  nativeAvailable: false,
+  nativeCount: 0,
+  nativeError: "",
+  quickSearchCount: 0,
+  quickSearchError: "",
+  addressBookCount: 0,
+  enumeratedContactCount: 0,
+  enumerationError: "",
+  finalCount: 0
+};
+
+async function getContactSearchDiagnostics() {
+  const data = { ...contactSearchDiagnosticsState };
+  try {
+    if (browser.permissions?.contains) {
+      data.permission = await browser.permissions.contains({ permissions: ["addressBooks"] }) ? "granted" : "missing";
+    } else {
+      data.permission = browser.contacts ? "api-present" : "api-missing";
+    }
+  } catch (error) {
+    data.permission = `check-failed: ${error?.message || String(error)}`;
+  }
+  const nativeApi = nativeApiIfLoaded();
+  if (nativeApi?.diagnostics) {
+    try {
+      const native = await nativeApi.diagnostics();
+      data.nativeAddressBook = native?.addressBookDiagnostics || null;
+    } catch (error) {
+      data.nativeDiagnosticsError = error?.message || String(error);
+    }
+  }
+  return data;
+}
+
 function contactSuggestionData(node) {
   const properties = node?.properties || {};
   let displayName = String(properties.DisplayName || "").trim();
@@ -790,9 +1196,101 @@ function contactSuggestionData(node) {
   }));
 }
 
-async function searchContacts(query) {
+const contactAutocompleteCache = new Map();
+const CONTACT_AUTOCOMPLETE_CACHE_MS = 30000;
+
+function contactBookScopeKey(addressBookIds) {
+  const ids = Array.isArray(addressBookIds) ? addressBookIds.map(String).filter(Boolean) : ["*"];
+  return ids.includes("*") ? "*" : [...ids].sort().join(",");
+}
+
+function contactAutocompleteCacheGet(text, addressBookIds) {
+  const key = `${contactBookScopeKey(addressBookIds)}::${String(text || "").trim().toLowerCase()}`;
+  const entry = contactAutocompleteCache.get(key);
+  if (!entry || Number(entry.expiresAt || 0) <= Date.now()) {
+    if (entry) contactAutocompleteCache.delete(key);
+    return null;
+  }
+  return Array.isArray(entry.results) ? entry.results : null;
+}
+
+function contactAutocompleteCachePut(text, results, addressBookIds) {
+  const key = `${contactBookScopeKey(addressBookIds)}::${String(text || "").trim().toLowerCase()}`;
+  if (!key) return;
+  contactAutocompleteCache.set(key, {
+    expiresAt: Date.now() + CONTACT_AUTOCOMPLETE_CACHE_MS,
+    results: Array.isArray(results) ? results.slice(0, 12) : []
+  });
+  if (contactAutocompleteCache.size > 60) {
+    const oldest = contactAutocompleteCache.keys().next().value;
+    if (oldest) contactAutocompleteCache.delete(oldest);
+  }
+}
+
+function contactSuggestionList(text, directResults, nodes) {
+  const needleParts = String(text || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const results = [];
+  const seen = new Set();
+  const addSuggestion = item => {
+    const searchable = `${item.name || ""} ${item.email || ""}`.toLowerCase();
+    if (needleParts.length && !needleParts.every(part => searchable.includes(part))) return;
+    const key = String(item.email || "").toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    results.push(item);
+  };
+  for (const item of directResults || []) {
+    addSuggestion(item);
+    if (results.length >= 20) break;
+  }
+  if (results.length < 20) {
+    for (const node of nodes || []) {
+      for (const item of contactSuggestionData(node)) {
+        addSuggestion({ ...item, source: node?.__m365Source || item.source || "webext" });
+        if (results.length >= 20) break;
+      }
+      if (results.length >= 20) break;
+    }
+  }
+  return results.slice(0, 12);
+}
+
+async function searchContacts(query, { diagnostic = false, addressBookIds = null } = {}) {
+  const startedAt = Date.now();
   const text = String(query || "").trim();
-  if (text.length < 2) return [];
+  contactSearchDiagnosticsState.at = new Date().toISOString();
+  contactSearchDiagnosticsState.query = text;
+  contactSearchDiagnosticsState.mode = diagnostic ? "diagnostic" : "autocomplete";
+  contactSearchDiagnosticsState.durationMs = 0;
+  contactSearchDiagnosticsState.cacheHit = false;
+  contactSearchDiagnosticsState.earlyReturn = "";
+  contactSearchDiagnosticsState.nativeAvailable = false;
+  contactSearchDiagnosticsState.nativeCount = 0;
+  contactSearchDiagnosticsState.nativeError = "";
+  contactSearchDiagnosticsState.quickSearchCount = 0;
+  contactSearchDiagnosticsState.quickSearchError = "";
+  contactSearchDiagnosticsState.addressBookCount = 0;
+  contactSearchDiagnosticsState.enumeratedContactCount = 0;
+  contactSearchDiagnosticsState.enumerationError = "";
+  contactSearchDiagnosticsState.finalCount = 0;
+  const config = await getConfig();
+  const configuredBooks = Array.isArray(addressBookIds) ? addressBookIds : config.contactAddressBookIds;
+  const bookScope = Array.isArray(configuredBooks) && configuredBooks.length ? configuredBooks.map(String) : [];
+  const searchAllBooks = bookScope.includes("*");
+  const selectedBookIds = searchAllBooks ? [] : bookScope;
+  contactSearchDiagnosticsState.selectedAddressBookIds = searchAllBooks ? ["*"] : [...selectedBookIds];
+  if (text.length < 2 || (!searchAllBooks && selectedBookIds.length === 0)) return [];
+
+  if (!diagnostic) {
+    const cached = contactAutocompleteCacheGet(text, searchAllBooks ? ["*"] : selectedBookIds);
+    if (cached) {
+      contactSearchDiagnosticsState.cacheHit = true;
+      contactSearchDiagnosticsState.finalCount = cached.length;
+      contactSearchDiagnosticsState.earlyReturn = "cache";
+      contactSearchDiagnosticsState.durationMs = Date.now() - startedAt;
+      return cached;
+    }
+  }
 
   const queryInfo = {
     searchString: text,
@@ -803,74 +1301,179 @@ async function searchContacts(query) {
   };
   const nodes = [];
   const nodeIds = new Set();
-  const errors = [];
-  const addNodes = values => {
-    for (const node of values || []) {
+  const directResults = [];
+  const addNodes = (values, source = "webext") => {
+    for (const original of values || []) {
+      const node = original && typeof original === "object" ? original : {};
       const key = String(node?.id || `${node?.parentId || ""}:${node?.properties?.PrimaryEmail || node?.vCard || ""}`);
       if (key && nodeIds.has(key)) continue;
       if (key) nodeIds.add(key);
+      try { node.__m365Source = source; } catch (_) {}
       nodes.push(node);
     }
   };
+  const addDirect = values => {
+    for (const item of values || []) {
+      const email = String(item?.email || "").trim();
+      if (!email || !email.includes("@")) continue;
+      directResults.push({
+        id: String(item?.id || ""),
+        name: String(item?.name || email).trim() || email,
+        email,
+        remote: Boolean(item?.remote),
+        readOnly: Boolean(item?.readOnly),
+        source: String(item?.source || "native")
+      });
+    }
+  };
 
-  // Thunderbird MV2 defines quickSearch([parentId], queryInfo). V2.17 passed
-  // QueryInfo as the first positional argument, which can be interpreted as
-  // parentId on some Thunderbird builds and therefore yield no suggestions.
-  // Use the explicit two-position signature first and retain compatibility
-  // fallbacks for older builds.
+  // V2.24 live autocomplete is latency-first: the official contacts.quickSearch
+  // result is enough to render suggestions immediately. V2.23 always continued
+  // into native + complete address-book enumeration (thousands of contacts), so
+  // results often arrived only after the user had typed the next characters and
+  // were then discarded by the UI serial guard.
   if (browser.contacts?.quickSearch) {
     try {
-      addNodes(await browser.contacts.quickSearch(undefined, queryInfo));
-    } catch (error) {
-      errors.push(error);
+      let values = [];
+      if (searchAllBooks) {
+        values = await browser.contacts.quickSearch(undefined, queryInfo);
+      } else {
+        const perBook = await Promise.all(selectedBookIds.map(async parentId => {
+          try { return await browser.contacts.quickSearch(parentId, queryInfo); }
+          catch (error) {
+            contactSearchDiagnosticsState.quickSearchError = contactSearchDiagnosticsState.quickSearchError || `${parentId}: ${error?.message || error}`;
+            return [];
+          }
+        }));
+        values = perBook.flat();
+      }
+      contactSearchDiagnosticsState.quickSearchCount = Array.isArray(values) ? values.length : 0;
+      addNodes(values, "thunderbird-quicksearch");
+    } catch (firstError) {
       try {
-        addNodes(await browser.contacts.quickSearch(text));
-      } catch (fallbackError) {
-        errors.push(fallbackError);
+        const values = searchAllBooks ? await browser.contacts.quickSearch(text) : [];
+        contactSearchDiagnosticsState.quickSearchCount = Array.isArray(values) ? values.length : 0;
+        addNodes(values, "thunderbird-quicksearch");
+      } catch (secondError) {
+        contactSearchDiagnosticsState.quickSearchError = `${firstError?.message || firstError}; fallback: ${secondError?.message || secondError}`;
       }
     }
+  } else {
+    contactSearchDiagnosticsState.quickSearchError = "browser.contacts.quickSearch unavailable";
   }
 
-  // Local fallback: enumerate complete address books. This also protects the
-  // autocomplete against API/signature differences and ensures that normal
-  // local address books work even if quickSearch is unavailable.
-  if (!nodes.length && browser.addressBooks?.list) {
+  let results = contactSuggestionList(text, directResults, nodes);
+  if (!diagnostic && results.length) {
+    contactSearchDiagnosticsState.finalCount = results.length;
+    contactSearchDiagnosticsState.earlyReturn = "quickSearch";
+    contactSearchDiagnosticsState.durationMs = Date.now() - startedAt;
+    contactAutocompleteCachePut(text, results, searchAllBooks ? ["*"] : selectedBookIds);
+    return results;
+  }
+
+  // NATIVE fallback: use Thunderbird's own compose-window address autocomplete.
+  // This remains important for asynchronous/CardDAV-backed directories. It is
+  // intentionally skipped when quickSearch already produced live suggestions.
+  try {
+    const nativeApi = await probeNativeApi({ retry: true });
+    contactSearchDiagnosticsState.nativeAvailable = Boolean(nativeApi?.searchAddressBook);
+    if (nativeApi?.activate) await nativeApi.activate();
+    if (nativeApi?.searchAddressBook) {
+      const values = await nativeApi.searchAddressBook(text, searchAllBooks ? ["*"] : selectedBookIds);
+      contactSearchDiagnosticsState.nativeCount = Array.isArray(values) ? values.length : 0;
+      addDirect(values);
+    }
+  } catch (error) {
+    contactSearchDiagnosticsState.nativeError = error?.message || String(error);
+  }
+
+  results = contactSuggestionList(text, directResults, nodes);
+  if (!diagnostic && results.length) {
+    contactSearchDiagnosticsState.finalCount = results.length;
+    contactSearchDiagnosticsState.earlyReturn = "native";
+    contactSearchDiagnosticsState.durationMs = Date.now() - startedAt;
+    contactAutocompleteCachePut(text, results, searchAllBooks ? ["*"] : selectedBookIds);
+    return results;
+  }
+
+  // Exhaustive enumeration is a diagnostics/last-resort path, not part of the
+  // normal live-keystroke path once a fast backend has returned usable matches.
+  if (browser.addressBooks?.list) {
     try {
       const books = await browser.addressBooks.list(true);
+      contactSearchDiagnosticsState.addressBookCount = Array.isArray(books) ? books.length : 0;
       for (const book of books || []) {
+        if (!searchAllBooks && !selectedBookIds.includes(String(book?.id || ""))) continue;
         if (Array.isArray(book?.contacts)) {
-          addNodes(book.contacts);
-          continue;
-        }
-        if (book?.id && browser.contacts?.list) {
-          try { addNodes(await browser.contacts.list(book.id)); }
-          catch (error) { errors.push(error); }
+          contactSearchDiagnosticsState.enumeratedContactCount += book.contacts.length;
+          addNodes(book.contacts, "thunderbird-enumeration");
+        } else if (book?.id && browser.contacts?.list) {
+          try {
+            const listed = await browser.contacts.list(book.id);
+            contactSearchDiagnosticsState.enumeratedContactCount += Array.isArray(listed) ? listed.length : 0;
+            addNodes(listed, "thunderbird-enumeration");
+          } catch (error) {
+            contactSearchDiagnosticsState.enumerationError += `${book?.name || book?.id}: ${error?.message || String(error)}; `;
+          }
         }
       }
     } catch (error) {
-      errors.push(error);
+      contactSearchDiagnosticsState.enumerationError += error?.message || String(error);
     }
   }
 
-  const needleParts = text.toLowerCase().split(/\s+/).filter(Boolean);
-  const results = [];
-  const seen = new Set();
-  for (const node of nodes) {
-    for (const item of contactSuggestionData(node)) {
-      const searchable = `${item.name || ""} ${item.email || ""}`.toLowerCase();
-      if (needleParts.length && !needleParts.every(part => searchable.includes(part))) continue;
-      const key = item.email.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      results.push(item);
-      if (results.length >= 12) return results;
-    }
-  }
-
-  if (!results.length && errors.length && !nodes.length) {
-    console.warn("M365 address-book autocomplete search failed", errors[0]);
+  results = contactSuggestionList(text, directResults, nodes);
+  contactSearchDiagnosticsState.finalCount = results.length;
+  contactSearchDiagnosticsState.durationMs = Date.now() - startedAt;
+  if (!diagnostic) contactAutocompleteCachePut(text, results, searchAllBooks ? ["*"] : selectedBookIds);
+  if (!results.length) {
+    console.warn("M365 address-book autocomplete returned no results", { ...contactSearchDiagnosticsState });
   }
   return results;
+}
+
+async function listAddressBooksForSelection() {
+  const merged = new Map();
+  if (browser.addressBooks?.list) {
+    try {
+      const books = await browser.addressBooks.list(false);
+      for (const book of books || []) {
+        const id = String(book?.id || "");
+        if (!id) continue;
+        merged.set(id, {
+          id,
+          name: String(book?.name || id),
+          remote: Boolean(book?.remote),
+          readOnly: Boolean(book?.readOnly),
+          useForAutocomplete: true,
+          cardCount: null,
+          source: "webextension"
+        });
+      }
+    } catch (_) {}
+  }
+  try {
+    const nativeApi = await probeNativeApi({ retry: false });
+    if (nativeApi?.listAddressBooks) {
+      const nativeBooks = await nativeApi.listAddressBooks();
+      for (const book of nativeBooks || []) {
+        const id = String(book?.id || book?.uid || "");
+        if (!id) continue;
+        const previous = merged.get(id) || {};
+        merged.set(id, {
+          ...previous,
+          id,
+          name: String(book?.name || previous.name || id),
+          remote: Boolean(book?.remote ?? previous.remote),
+          readOnly: Boolean(book?.readOnly ?? previous.readOnly),
+          useForAutocomplete: book?.useForAutocomplete !== false,
+          cardCount: Number.isFinite(Number(book?.cardCount)) ? Number(book.cardCount) : previous.cardCount ?? null,
+          source: previous.source ? `${previous.source}+native` : "native"
+        });
+      }
+    }
+  } catch (_) {}
+  return [...merged.values()].sort((a,b) => String(a.name).localeCompare(String(b.name)));
 }
 
 function cleanAttendees(attendees) {
@@ -907,6 +1510,22 @@ function normalizeSensitivity(value) {
   return allowed.has(value) ? value : "normal";
 }
 
+function ensureTeamsOrganizerAttendee(event, profile, enabled) {
+  if (!enabled) return false;
+  const address = profileMail(profile);
+  if (!address) return false;
+  event.attendees = Array.isArray(event.attendees) ? event.attendees : [];
+  if (event.attendees.some(attendee => String(attendee?.emailAddress?.address || "").trim().toLowerCase() === address)) {
+    return false;
+  }
+  const displayName = String(profile?.displayName || "").trim();
+  event.attendees.push({
+    emailAddress: { address, ...(displayName ? { name: displayName } : {}) },
+    type: "required"
+  });
+  return true;
+}
+
 function buildGraphEventPayload(payload, { includeOnlineMeeting = false } = {}) {
   if (!payload.subject?.trim()) throw new Error(t("errorSubjectMissing"));
   if (!payload.start || !payload.end) throw new Error(t("errorStartEndRequired"));
@@ -939,12 +1558,33 @@ async function createEvent(payload) {
   if (!payload.calendarId) throw new Error(t("errorNoCalendarSelected"));
   const config = await getConfig();
   const event = buildGraphEventPayload({ ...payload, timeZone: config.timeZone }, { includeOnlineMeeting: true });
+
+  // V2.30: Exchange sends meeting invitations to attendees, not a separate
+  // invitation to the organizer merely because they created the event. For a
+  // Teams event created from the M365 Space, explicitly keep the signed-in
+  // organizer in the Event.attendees collection as a required participant.
+  // The Event resource supports this and the server then processes the owner
+  // through the same invitation path as the other attendees.
+  if (payload.teams) {
+    let profile = await storedProfile();
+    if (!profileMail(profile)) {
+      try { profile = await loadAndStoreProfile(); } catch (_) {}
+    }
+    ensureTeamsOrganizerAttendee(event, profile, true);
+  }
+
   const created = await graphRequest(`/me/calendars/${encodeId(payload.calendarId)}/events`, {
     method: "POST",
     body: JSON.stringify(event)
   });
+  if (created?.id) rememberNativeUpsert(payload.calendarId, created);
+  let complete = created;
+  if (created?.id) {
+    try { complete = await getGraphEventForNative(created.id, payload.calendarId); } catch (_) {}
+    rememberNativeUpsert(payload.calendarId, complete || created);
+  }
   await clearSyncCache({ calendarId: payload.calendarId });
-  return created;
+  return complete;
 }
 
 async function updateEvent(payload) {
@@ -962,8 +1602,13 @@ async function updateEvent(payload) {
     headers: nativeGraphHeaders(),
     body: JSON.stringify(patch)
   });
+  let complete = updated;
+  if (updated?.id) {
+    try { complete = await getGraphEventForNative(updated.id, payload.calendarId || ""); } catch (_) {}
+    if (payload.calendarId) rememberNativeUpsert(payload.calendarId, complete || updated);
+  }
   await clearSyncCache({ calendarId: payload.calendarId || "" });
-  return updated?.id ? getGraphEventForNative(updated.id, payload.calendarId || "") : updated;
+  return complete;
 }
 
 async function deleteEvent({ eventId, calendarId = "" }) {
@@ -972,7 +1617,10 @@ async function deleteEvent({ eventId, calendarId = "" }) {
     ? `/me/calendars/${encodeId(calendarId)}/events/${encodeId(eventId)}`
     : `/me/events/${encodeId(eventId)}`;
   await graphRequest(eventPath, { method: "DELETE" });
-  if (calendarId) await clearSyncCache({ calendarId });
+  if (calendarId) {
+    rememberNativeDelete(calendarId, eventId);
+    await clearSyncCache({ calendarId });
+  }
   return { ok: true };
 }
 
@@ -1028,8 +1676,18 @@ async function listNativeGraphEvents(calendarId) {
     next = data?.["@odata.nextLink"] || "";
   }
   const hydrated = await hydrateEventDetails(calendarId, events);
-  hydrated.events.sort((a, b) => new Date(a?.start?.dateTime || 0) - new Date(b?.start?.dateTime || 0));
-  return { events: hydrated.events, range, pages, hydrated: hydrated.hydrated, unresolved: hydrated.unresolved };
+  const guarded = applyRecentNativeWriteGuards(calendarId, hydrated.events);
+  guarded.events.sort((a, b) => new Date(a?.start?.dateTime || 0) - new Date(b?.start?.dateTime || 0));
+  return {
+    events: guarded.events,
+    range,
+    pages,
+    hydrated: hydrated.hydrated,
+    unresolved: hydrated.unresolved,
+    protectedUpserts: guarded.protectedUpserts,
+    protectedDeletes: guarded.protectedDeletes,
+    recentWriteGuards: guarded.remaining
+  };
 }
 
 async function getGraphEventForNative(eventId, calendarId = "") {
@@ -1047,10 +1705,30 @@ async function invalidateAfterNativeWrite(calendarId) {
   if (calendarId) await clearSyncCache({ calendarId });
 }
 
+async function authDiagnostics() {
+  const auth = await getAuth();
+  const expiresAt = Number(auth?.expiresAt || 0);
+  return {
+    hasAccessToken: Boolean(auth?.accessToken),
+    hasRefreshToken: Boolean(auth?.refreshToken),
+    expiresAt,
+    expiresInSeconds: expiresAt ? Math.round((expiresAt - Date.now()) / 1000) : null,
+    requiresInteraction: Boolean(auth?.requiresInteraction),
+    lastAuthError: String(auth?.lastAuthError || ""),
+    lastRefreshAt: String(auth?.lastRefreshAt || ""),
+    lastSilentAuthAttemptAt: lastSilentAuthAttemptAt ? new Date(lastSilentAuthAttemptAt).toISOString() : "",
+    lastSilentAuthError: String(lastSilentAuthError || "")
+  };
+}
+
 async function nativeStatus() {
   const config = await getConfig();
-  const status = await authStatus();
   const api = await probeNativeApi({ retry: true });
+  if (api?.activate && config.nativeIntegration) {
+    try { await api.activate(); }
+    catch (error) { console.warn("M365 native provider activation failed", error); }
+  }
+  const status = await authStatus();
 
   if (!api) {
     return {
@@ -1068,7 +1746,10 @@ async function nativeStatus() {
         registeredCalendarCount: 0
       },
       daysBefore: config.nativeDaysBefore,
-      daysAfter: config.nativeDaysAfter
+      daysAfter: config.nativeDaysAfter,
+      autoSync: { ...nativeAutoSyncState, timer: Boolean(nativeAutoSyncState.timer) },
+      providerStartup: { ...nativeProviderStartupState },
+      authDiagnostics: await authDiagnostics()
     };
   }
 
@@ -1118,7 +1799,10 @@ async function nativeStatus() {
     diagnostics,
     autoEnsure,
     daysBefore: config.nativeDaysBefore,
-    daysAfter: config.nativeDaysAfter
+    daysAfter: config.nativeDaysAfter,
+    autoSync: { ...nativeAutoSyncState, timer: Boolean(nativeAutoSyncState.timer) },
+    providerStartup: { ...nativeProviderStartupState },
+    authDiagnostics: await authDiagnostics()
   };
 }
 
@@ -1134,9 +1818,23 @@ async function ensureNativeCalendars({ synchronize = false } = {}) {
   }
   const config = await getConfig();
   const status = await authStatus();
-  if (!config.nativeIntegration || !status.loggedIn) {
+  if (!config.nativeIntegration) {
     try { await api.removeAll(); } catch (_) {}
     return { available: true, enabled: false, calendars: [] };
+  }
+  if (!status.loggedIn) {
+    // Keep the already registered native calendars (and their cached events /
+    // Thunderbird UI settings) during a temporary auth interruption. Only an
+    // explicit logout or disabling Native integration removes them.
+    let calendars = [];
+    try { calendars = await api.status(); } catch (_) {}
+    return {
+      available: true,
+      enabled: true,
+      loggedIn: false,
+      preservedOffline: true,
+      calendars: Array.isArray(calendars) ? calendars : []
+    };
   }
 
   const [calendarResult, profile] = await Promise.all([listCalendarsCached(), storedProfile()]);
@@ -1155,24 +1853,103 @@ async function ensureNativeCalendars({ synchronize = false } = {}) {
     organizerName
   }));
 
-  const calendars = await api.ensureCalendars(descriptors);
-  if (synchronize) await api.synchronize();
+  const nativeResult = await api.ensureCalendars(descriptors);
+  if (nativeResult?.ok === false) {
+    const stage = nativeResult.errorStage ? `[${nativeResult.errorStage}] ` : "";
+    const error = new Error(`${stage}${nativeResult.error || t("unknownError")}`);
+    error.nativeDiagnostics = nativeResult.diagnostics || null;
+    throw error;
+  }
+  const calendars = Array.isArray(nativeResult)
+    ? nativeResult
+    : (Array.isArray(nativeResult?.calendars) ? nativeResult.calendars : []);
+
+  let synchronized = 0;
+  let synchronizeDiagnostics = null;
+  if (synchronize) {
+    const syncResult = await api.synchronize();
+    if (syncResult?.ok === false) {
+      const stage = syncResult.errorStage ? `[${syncResult.errorStage}] ` : "";
+      const error = new Error(`${stage}${syncResult.error || t("unknownError")}`);
+      error.nativeDiagnostics = syncResult.diagnostics || null;
+      throw error;
+    }
+    synchronized = typeof syncResult === "number" ? syncResult : Number(syncResult?.count || 0);
+    synchronizeDiagnostics = syncResult?.diagnostics || null;
+  }
   return {
     available: true,
     enabled: true,
     calendars,
     graphCalendarCount: descriptors.length,
-    offlineCalendarList: Boolean(calendarResult.offline)
+    offlineCalendarList: Boolean(calendarResult.offline),
+    synchronized,
+    diagnostics: nativeResult?.diagnostics || null,
+    synchronizeDiagnostics
   };
 }
 
 async function syncNativeCalendars() {
   const ensured = await ensureNativeCalendars({ synchronize: false });
-  if (!ensured.enabled) return { ...ensured, synchronized: 0 };
+  if (!ensured.enabled) return { ...ensured, synchronized: 0, directCachePush: [] };
   const api = nativeApiIfLoaded() || await probeNativeApi({ retry: true });
-  if (!api) return { ...ensured, synchronized: 0, bridgeError: String(nativeBridgeState.error || "") };
-  const synchronized = await api.synchronize();
-  return { ...ensured, synchronized };
+  if (!api) {
+    return { ...ensured, synchronized: 0, directCachePush: [], bridgeError: String(nativeBridgeState.error || "") };
+  }
+  if (!api.replaceCalendarEvents) {
+    throw new Error("Native V2.28 cache-push API is unavailable");
+  }
+
+  const results = [];
+  let graphEvents = 0;
+  let cacheWrites = 0;
+  let cacheItems = 0;
+
+  // V2.16 deliberately fetches Graph in the proven WebExtension context and
+  // pushes the completed snapshot directly into Thunderbird's offline cache.
+  // The custom provider onSync/replayChangesOn path remains as a fallback for
+  // Thunderbird-triggered refreshes, but is no longer the primary sync path.
+  for (const calendar of ensured.calendars || []) {
+    const graphCalendarId = String(calendar.graphCalendarId || "");
+    if (!graphCalendarId) continue;
+    const graph = await listNativeGraphEvents(graphCalendarId);
+    const nativeEvents = graph.events.map(M365_NATIVE.graphEventToNative);
+    const pushed = await api.replaceCalendarEvents(graphCalendarId, nativeEvents);
+    if (pushed?.ok === false) {
+      const stage = pushed.errorStage ? `[${pushed.errorStage}] ` : "";
+      const error = new Error(`${stage}${pushed.error || t("unknownError")}`);
+      error.nativeDiagnostics = pushed.diagnostics || null;
+      throw error;
+    }
+    graphEvents += Number(pushed?.graphEvents ?? nativeEvents.length);
+    cacheWrites += Number(pushed?.cacheWrites || 0);
+    cacheItems += Number(pushed?.cacheItems || 0);
+    results.push({
+      graphCalendarId,
+      name: calendar.name || "Microsoft 365",
+      graphEvents: Number(pushed?.graphEvents ?? nativeEvents.length),
+      cacheWrites: Number(pushed?.cacheWrites || 0),
+      cacheItems: Number(pushed?.cacheItems || 0),
+      pages: Number(graph.pages || 0),
+      message: String(pushed?.message || "")
+    });
+  }
+
+  let viewReload = null;
+  if (typeof api.reloadViews === "function") {
+    try { viewReload = await api.reloadViews("sync-complete"); }
+    catch (error) { console.warn("M365 native calendar view reload after sync failed", error); }
+  }
+
+  return {
+    ...ensured,
+    synchronized: results.length,
+    directCachePush: results,
+    directGraphEvents: graphEvents,
+    directCacheWrites: cacheWrites,
+    directCacheItems: cacheItems,
+    viewReload
+  };
 }
 
 async function nativeSyncHandler(calendar) {
@@ -1197,6 +1974,7 @@ async function nativeCreateHandler(calendar, item) {
   });
   await invalidateAfterNativeWrite(calendar.graphCalendarId);
   const complete = created?.id ? await getGraphEventForNative(created.id, calendar.graphCalendarId) : created;
+  if (complete?.id) rememberNativeUpsert(calendar.graphCalendarId, complete);
   return M365_NATIVE.graphEventToNative(complete);
 }
 
@@ -1242,36 +2020,62 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
 
   await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
   const updated = await getGraphEventForNative(item.id, calendar?.graphCalendarId || "");
+  if (calendar?.graphCalendarId && updated?.id) rememberNativeUpsert(calendar.graphCalendarId, updated);
   return M365_NATIVE.graphEventToNative(updated);
 }
 
 async function nativeRemoveHandler(calendar, item, options = {}) {
   if (!item?.id) throw new Error(t("errorEventIdMissing"));
   await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(item.id)}`, { method: "DELETE" });
+  if (calendar?.graphCalendarId) rememberNativeDelete(calendar.graphCalendarId, item.id);
   await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
   return true;
 }
 
-async function refreshNativeAfterExternalWrite() {
+async function refreshNativeAfterExternalWrite({ calendarId = "", event = null, deletedEventId = "" } = {}) {
   try {
     const config = await getConfig();
-    const api = nativeApiIfLoaded();
-    if (config.nativeIntegration && api?.synchronize) {
-      await api.synchronize();
+    if (!config.nativeIntegration) return;
+    const status = await authStatus();
+    if (!status.loggedIn) return;
+    const api = nativeApiIfLoaded() || await probeNativeApi({ retry: true });
+    if (!api) return;
+
+    // V2.27: do not wait for calendarView propagation. The direct event endpoint
+    // is authoritative immediately after POST/PATCH, so place that exact object
+    // in Thunderbird's cache first. The normal full sync follows later.
+    await ensureNativeCalendars({ synchronize: false });
+    if (calendarId && event?.id && api.upsertCalendarEvent) {
+      const nativeEvent = M365_NATIVE.graphEventToNative(event);
+      await api.upsertCalendarEvent(calendarId, nativeEvent);
+      if (api.reloadViews) await api.reloadViews("external-write-upsert");
+      scheduleNativeAutoSync("external-write-reconcile", 2200);
+      return;
     }
+    if (calendarId && deletedEventId && api.removeCalendarEvent) {
+      await api.removeCalendarEvent(calendarId, deletedEventId);
+      if (api.reloadViews) await api.reloadViews("external-write-delete");
+      scheduleNativeAutoSync("external-write-reconcile", 2200);
+      return;
+    }
+    scheduleNativeAutoSync("external-write", 900);
   } catch (error) {
     console.warn("M365 native refresh after external write failed", error);
+    scheduleNativeAutoSync("external-write-fallback", 1200);
   }
 }
 
 async function initializeNativeCalendars() {
   try {
+    const config = await getConfig();
+    if (!config.nativeIntegration) return;
+    const api = await probeNativeApi({ retry: true });
+    if (api?.activate) await api.activate();
     const status = await authStatus();
-    if (status.loggedIn) await ensureNativeCalendars({ synchronize: true });
-    else {
-      const api = nativeApiIfLoaded();
-      if (api?.removeAll) await api.removeAll();
-    }
+    // Never delete persisted native calendars merely because authentication is
+    // temporarily unavailable. Their registry preferences and cached events are
+    // useful offline and survive until explicit Logout/native disable.
+    if (status.loggedIn) await syncNativeCalendars();
   } catch (error) {
     console.error("M365 native calendar initialization failed", error);
   }
@@ -1514,6 +2318,28 @@ async function respondInvitation({ messageId, response, comment = "", sendRespon
   };
 }
 
+async function openNativeTeamsMeetingPopup(details = {}) {
+  const params = new URLSearchParams({ nativeTeams: "1" });
+  if (details?.graphCalendarId) params.set("calendarId", String(details.graphCalendarId));
+  if (details?.start) params.set("start", String(details.start));
+  if (details?.eventId) params.set("editEventId", String(details.eventId));
+  const url = browser.runtime.getURL(`calendar/calendar.html?${params.toString()}`);
+  if (browser.windows?.create) {
+    await browser.windows.create({
+      url,
+      type: "popup",
+      width: 680,
+      height: 640
+    });
+    return true;
+  }
+  if (browser.tabs?.create) {
+    await browser.tabs.create({ url });
+    return true;
+  }
+  throw new Error("Thunderbird cannot open the Teams meeting editor window");
+}
+
 async function ensureSpace() {
   if (!browser.spaces?.create) return;
   try {
@@ -1567,21 +2393,25 @@ browser.runtime.onMessage.addListener(async message => {
         return { ok: true, data };
       }
       case "createEvent": {
-        const data = await createEvent(message.payload || {});
-        await refreshNativeAfterExternalWrite();
+        const payload = message.payload || {};
+        const data = await createEvent(payload);
+        await refreshNativeAfterExternalWrite({ calendarId: payload.calendarId || "", event: data });
         return { ok: true, data };
       }
       case "updateEvent": {
-        const data = await updateEvent(message.payload || {});
-        await refreshNativeAfterExternalWrite();
+        const payload = message.payload || {};
+        const data = await updateEvent(payload);
+        await refreshNativeAfterExternalWrite({ calendarId: payload.calendarId || "", event: data });
         return { ok: true, data };
       }
       case "deleteEvent": {
         const data = await deleteEvent(message);
-        await refreshNativeAfterExternalWrite();
+        await refreshNativeAfterExternalWrite({ calendarId: message.calendarId || "", deletedEventId: message.eventId || "" });
         return { ok: true, data };
       }
-      case "searchContacts": return { ok: true, data: await searchContacts(message.query) };
+      case "listAddressBooks": return { ok: true, data: await listAddressBooksForSelection() };
+      case "searchContacts": return { ok: true, data: await searchContacts(message.query, { diagnostic: Boolean(message.diagnostic), addressBookIds: message.addressBookIds || null }) };
+      case "contactDiagnostics": return { ok: true, data: await getContactSearchDiagnostics() };
       case "getSchedule": return { ok: true, data: await getSchedule(message) };
       case "syncCacheStats": return { ok: true, data: await syncCacheStats() };
       case "clearSyncCache": return { ok: true, data: await clearSyncCache(message) };
@@ -1598,10 +2428,34 @@ browser.runtime.onMessage.addListener(async message => {
     }
   } catch (error) {
     console.error("M365 Calendar error", error);
-    return { ok: false, error: error?.message || String(error), status: error?.status || 0 };
+    return {
+      ok: false,
+      error: error?.message || String(error),
+      status: error?.status || 0,
+      authRequired: Boolean(error?.authRequired)
+    };
   }
 });
 
-// STANDARD-first startup: create the normal M365 Space and do nothing
-// privileged until an explicit native action is requested.
+// V2.16 startup: create the normal M365 Space first, then perform a delayed
+// native synchronization when a valid login and native integration are present.
+// This also runs when an existing add-on is re-enabled because its background
+// script is started again.
 ensureSpace();
+scheduleNativeProviderActivation("background-start", 1200);
+scheduleNativeAutoSync("background-start", 3000);
+
+if (browser.runtime?.onStartup?.addListener) {
+  browser.runtime.onStartup.addListener(() => {
+    ensureSpace();
+    scheduleNativeProviderActivation("thunderbird-startup", 1200);
+    scheduleNativeAutoSync("thunderbird-startup", 3000);
+  });
+}
+
+if (browser.runtime?.onInstalled?.addListener) {
+  browser.runtime.onInstalled.addListener(details => {
+    ensureSpace();
+    scheduleNativeAutoSync(`extension-${details?.reason || "installed"}`, 2000);
+  });
+}

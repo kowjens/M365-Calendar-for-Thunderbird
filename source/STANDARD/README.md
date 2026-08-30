@@ -1,9 +1,11 @@
-# M365 Calendar for Thunderbird V2.19 — STANDARD
+# M365 Calendar for Thunderbird V2.32 – GITHUB_STANDARD
 
-**Author:** Jens Kowalsky  
-**Distribution:** Public GitHub  
-**Version:** 2.0.19
+Microsoft 365 / Exchange Online calendar integration for Thunderbird using Microsoft Graph.
 
-This is the neutral **STANDARD** source tree. Client ID and tenant defaults are intentionally empty.
+- Build mode: **STANDARD**
+- Distribution: **GITHUB**
+- Client ID/Tenant preconfigured: **no**
+- Native Thunderbird calendar provider: **no**
+- New in V2.32: read-only calendar diagnostic export in NATIVE builds for Graph/Space vs. Thunderbird cache comparison
 
-See the repository-level `README.md`, `BUILD.md`, and `docs/` for setup and build instructions.
+See `docs/USER_GUIDE_DE.md`, `docs/USER_GUIDE_EN.md`, `docs/ADMIN_GUIDE_DE.md` and `docs/ADMIN_GUIDE_EN.md`.

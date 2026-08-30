@@ -3,7 +3,7 @@ from pathlib import Path
 import json, re, sys
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC_ID='m365-calendar@jenskowalsky.invalid'
-AUTHOR='Jens Kowalsky'
+AUTHOR='Jens Kowalsky, 3-5 Power Electronics GmbH'
 for variant in ['STANDARD','NATIVE']:
     src=ROOT/'source'/variant
     cfg=(src/'config/build-config.js').read_text(encoding='utf-8')

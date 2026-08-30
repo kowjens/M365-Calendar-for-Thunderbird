@@ -1,8 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.19
-
-**Author:** Jens Kowalsky  
-**Public GitHub edition:** no preconfigured Client ID or tenant.
-
+# User Guide – M365 Calendar for Thunderbird V2.28
 
 Build: **GITHUB / NATIVE**
 
@@ -51,6 +47,14 @@ If an error occurs:
 4. Send the copied block to your administrator/support contact.
 
 The block includes fields such as `build`, `experiment`, `providerRuntime`, `tbCalendars`, `graphCalendars`, `syncCacheItems`, possible `syncError` lines, and a `trace`.
+
+### Diagnostic ZIP for missing native events (V2.32)
+
+Open **Microsoft 365 → ⚙ Settings → Native Thunderbird calendar integration** and use **Calendar diagnostic export**. Choose a range that includes the missing event plus at least one recurring instance before and after it, then select **Create diagnostic ZIP**.
+
+The export starts **no native synchronization**. This preserves the failing Thunderbird cache and compares it with the current Graph/Space data. The ZIP includes `comparison.csv`, `series_comparison.json`, `graph_calendarview_raw.json`, `space_snapshot.json`, `native_cache.json`, and `native_calendar.ics`. A Graph occurrence/exception that is absent from the native cache is marked `missing-native`.
+
+The ZIP contains calendar content and attendee addresses, but no OAuth access or refresh tokens.
 
 ## Create a Teams meeting from Thunderbird's built-in Calendar
 
@@ -108,3 +112,34 @@ In the NATIVE build, **double-clicking an event that belongs to an M365 calendar
 ## V2.19: dialogs on smaller displays
 
 M365 event windows now use a fixed header and action footer with one scrollable content area in between. Buttons such as **Join Teams**, **Edit**, **Decline**, **Tentative**, and **Accept** therefore remain reachable with long meeting information and on smaller laptop displays. Long Teams/meeting URLs wrap instead of creating their own horizontal scroll area.
+
+## V2.21: Address books, calendar preferences and sign-in stability
+
+- **Attendee autocomplete (NATIVE):** In addition to the WebExtension address-book API, the NATIVE build now searches Thunderbird's own privileged address-book manager. This uses the same local/CardDAV/OS-backed address-book data Thunderbird itself uses where available.
+- **Calendar preferences survive restarts:** colour, enabled/disabled state, visibility, alarm suppression and the selected mail identity are stored as user preferences and restored after Thunderbird restarts. Graph synchronization no longer overwrites a user-selected calendar colour.
+- **More resilient Microsoft sign-in:** transient token/network errors no longer erase the stored authentication state. The add-on first attempts silent recovery using the existing Microsoft browser session and requests interactive sign-in only when Microsoft actually requires it.
+- **Native calendar mail identity (NATIVE):** the provider now resolves Thunderbird's `imip.identity` correctly. If a Thunderbird mail identity uses the same address as the signed-in M365 user, it is selected automatically when the calendar is first created. The selection remains editable in calendar properties and is persisted.
+
+## V2.23: event time, Thunderbird reload and Settings window
+
+- **Native event times:** V2.23 fixes Thunderbird's internal conversion so an absolute instant is not reinterpreted as a local wall-clock time in UTC. After upgrading, run **Sync native calendars** once so already shifted cache entries are rewritten.
+- **Reload Calendars and Changes:** provider replay and direct cache reconciliation are serialized per M365 calendar; recurrence occurrences are no longer treated as additional stored parent rows during reconciliation.
+- **Settings on smaller displays:** controls can no longer widen the dialog beyond its viewport. Below 720 px the settings form switches to one column.
+- The CardDAV/address-book search fixed in V2.22 is retained unchanged.
+
+
+## V2.24: newly created events and attendee suggestions
+
+- Events just created/changed in the add-on or native M365 calendar are protected against a briefly stale Graph `calendarView` snapshot, so they should no longer flash and disappear after synchronization.
+- Live attendee suggestions use Thunderbird's fast `contacts.quickSearch()` first. Full address-book enumeration is now only a fallback or part of the Settings diagnostic test.
+- Suggestions remain active for complete email addresses as well.
+
+
+## V2.27: Address books for attendee suggestions
+
+Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address books can be selected under **Address books for attendee suggestions**. The selection limits live attendee lookup and can exclude large legacy/collected address books.
+
+
+## Calendar views in the Microsoft 365 Space
+
+Use the buttons above the calendar to switch between **Month**, **Week**, **Day**, and **Agenda**. The selected view is remembered; ‹ / Today / › navigates according to the active view.

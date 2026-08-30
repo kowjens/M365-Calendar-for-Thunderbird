@@ -1,0 +1,17 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const bg = fs.readFileSync(path.resolve(__dirname,"../background.js"),"utf8");
+const start = bg.indexOf("async function nativeUpdateHandler");
+const end = bg.indexOf("async function nativeRemoveHandler", start);
+const fn = bg.slice(start, end);
+const responsePos = fn.indexOf("const responseAction = M365_NATIVE.responseChangeForUser");
+const organizerPos = fn.indexOf("const organizer = String(oldItem?.organizer?.address");
+const patchPos = fn.indexOf('method: "PATCH"');
+assert.ok(responsePos >= 0 && organizerPos > responsePos, "RSVP must be detected before organizer classification");
+assert.ok(fn.includes("if (responseAction)"));
+assert.ok(fn.includes("sendResponse: true"));
+assert.ok(fn.indexOf("return M365_NATIVE.graphEventToNative(updated);", responsePos) < organizerPos, "RSVP branch must return before any meeting PATCH path");
+assert.ok(patchPos > organizerPos, "full PATCH path must remain after RSVP early-return");
+console.log("V2.30 native RSVP isolation contract OK");

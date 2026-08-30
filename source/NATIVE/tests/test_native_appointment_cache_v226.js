@@ -1,0 +1,13 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const api = fs.readFileSync(path.join(__dirname, "../experiments/nativeCalendar/api.js"), "utf8");
+const start = api.indexOf("async function upsertCalendarEventUnlocked");
+const end = api.indexOf("async function upsertCalendarEvent(", start);
+const block = api.slice(start, end);
+assert.ok(block.includes("offlineStorage.getItem(id)"), "direct upsert must read back the stored appointment");
+assert.ok(block.includes("lastAppointment"), "direct diagnostics must distinguish appointments");
+assert.ok(!block.includes("offlineStorage.startBatch()"), "single-event direct upsert must not be batched");
+assert.ok(api.includes('X-M365-APPOINTMENT'), "plain appointment marker must be retained in Thunderbird cache");
+console.log("test_native_appointment_cache_v226.js: OK");

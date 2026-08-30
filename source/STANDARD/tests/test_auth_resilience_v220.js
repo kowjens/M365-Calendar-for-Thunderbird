@@ -1,0 +1,22 @@
+"use strict";
+const fs = require("fs"), path = require("path"), assert = require("assert");
+const root = path.resolve(__dirname, "..");
+const bg = fs.readFileSync(path.join(root, "background.js"), "utf8");
+assert.ok(bg.includes('authorizeToken({ prompt: "none", interactive: false })'), "silent Microsoft session recovery missing");
+assert.ok(bg.includes("requiresInteraction"), "auth state must distinguish interaction-required from transient errors");
+assert.ok(bg.includes("Do NOT delete a still-useful refresh token"), "refresh failure must preserve tokens on transient errors");
+const refreshStart = bg.indexOf("async function refreshAccessToken");
+const refreshEnd = bg.indexOf("async function getAccessToken", refreshStart);
+const refresh = bg.slice(refreshStart, refreshEnd);
+assert.ok(!refresh.includes("await clearAuth()"), "refreshAccessToken must not wipe auth on recoverable errors");
+const nativeStart = bg.indexOf("async function ensureNativeCalendars");
+const nativeEnd = bg.indexOf("async function syncNativeCalendars", nativeStart);
+const ensure = bg.slice(nativeStart, nativeEnd);
+assert.ok(ensure.includes("preservedOffline: true"), "temporary auth interruption must preserve native calendars");
+assert.ok(!ensure.split("if (!status.loggedIn)")[1]?.split("}")[0]?.includes("removeAll"), "temporary auth interruption must not remove native calendars");
+
+const initStart = bg.indexOf("async function initializeNativeCalendars");
+const initEnd = bg.indexOf("\n\nconst INVITE_EVENT_SELECT", initStart);
+const init = bg.slice(initStart, initEnd);
+assert.ok(!init.includes("removeAll"), "temporary startup auth state must never delete native calendars");
+console.log("Microsoft auth resilience V2.22: OK");

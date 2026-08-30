@@ -1025,5 +1025,80 @@
   },
   "eventNotFound": {
     "message": "Der Microsoft-365-Termin konnte nicht geladen werden."
+  },
+  "contactTestTitle": {
+    "message": "Adressbuch-Test"
+  },
+  "contactTestHelp": {
+    "message": "Testet exakt dieselbe Suche wie das Teilnehmerfeld und zeigt den verwendeten Thunderbird-Backend-Pfad."
+  },
+  "contactTestPlaceholder": {
+    "message": "Name oder E-Mail"
+  },
+  "contactTestButton": {
+    "message": "Suchen"
+  },
+  "contactTestNeedQuery": {
+    "message": "Bitte mindestens zwei Zeichen eingeben."
+  },
+  "contactTestRunning": {
+    "message": "Adressbücher werden getestet …"
+  },
+  "contactTestResults": {
+    "message": "Treffer"
+  },
+  "contactTestFailed": {
+    "message": "Adressbuch-Test fehlgeschlagen"
+  },
+  "timeZoneHelp": {
+    "message": "Exchange/Graph-Zeitzone für den M365-Editor und Verfügbarkeitsabfragen. Die native Thunderbird-Synchronisation transportiert Zeiten intern in UTC, um doppelte Sommerzeit-/Zeitzonenverschiebungen zu vermeiden."
+  },
+  "timeZoneCustom": {
+    "message": "benutzerdefinierte vorhandene Einstellung"
+  },
+  "contactAddressBooksTitle": {
+    "message": "Adressbücher für Teilnehmer-Vorschläge"
+  },
+  "contactAddressBooksHelp": {
+    "message": "Mehrfachauswahl ist möglich. Nur ausgewählte Bücher werden für Live-Vorschläge durchsucht."
+  },
+  "contactAddressBooksAll": {
+    "message": "Alle auswählen"
+  },
+  "contactAddressBooksRecommended": {
+    "message": "Autocomplete-Bücher"
+  },
+  "contactAddressBooksNone": {
+    "message": "Keine"
+  },
+  "contactAddressBooksStatus": {
+    "message": "$1 von $2 Adressbüchern ausgewählt."
+  },
+  "contactAddressBookRemote": {
+    "message": "remote"
+  },
+  "contactAddressBookLocal": {
+    "message": "lokal"
+  },
+  "contactAddressBookNotAutocomplete": {
+    "message": "nicht für Autocomplete markiert"
+  },
+  "viewMonth": {
+    "message": "Monat"
+  },
+  "viewWeek": {
+    "message": "Woche"
+  },
+  "viewDay": {
+    "message": "Tag"
+  },
+  "viewAgenda": {
+    "message": "Agenda"
+  },
+  "noEventsDay": {
+    "message": "Keine Termine"
+  },
+  "noEventsPeriod": {
+    "message": "Keine Termine in diesem Zeitraum"
   }
 }

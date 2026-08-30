@@ -1,0 +1,14 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const bg = fs.readFileSync(path.resolve(__dirname,"../background.js"),"utf8");
+assert.ok(bg.includes("function ensureTeamsOrganizerAttendee(event, profile, enabled)"));
+assert.ok(bg.includes("if (payload.teams)"));
+assert.ok(bg.includes("ensureTeamsOrganizerAttendee(event, profile, true);"));
+assert.ok(bg.includes('type: "required"'));
+const createStart = bg.indexOf("async function createEvent(payload)");
+const createEnd = bg.indexOf("async function updateEvent", createStart);
+const create = bg.slice(createStart, createEnd);
+assert.ok(create.indexOf("ensureTeamsOrganizerAttendee") < create.indexOf("const created = await graphRequest"));
+console.log("V2.30 Teams organizer-attendee contract OK");

@@ -1,9 +1,11 @@
 # Authors
 
-- **Jens Kowalsky** — original author and maintainer.
+## Jens Kowalsky, 3-5 Power Electronics GmbH
 
-## Professional context
+Author and maintainer of **M365 Calendar for Thunderbird**.
 
-M365 Calendar for Thunderbird is an independent open-source project that grew out of practical Microsoft 365 / Exchange Online / Teams integration work, including workflows used in the author's professional work at [3-5 Power Electronics GmbH](https://3-5pe.com/).
+The project grew from pragmatic Microsoft 365 / Thunderbird workflow work encountered alongside engineering work at [3-5 Power Electronics GmbH](https://3-5pe.com/).
 
-The project is not an official product of 3-5 Power Electronics GmbH, Microsoft, or Mozilla Thunderbird.
+**QnD by JK** means **“Quick 'n Dirty”**: a self-deprecating description of a pragmatic engineering development style, not an intention to skip security, testing or maintainability.
+
+The project is not an official product of Microsoft or Mozilla Thunderbird.

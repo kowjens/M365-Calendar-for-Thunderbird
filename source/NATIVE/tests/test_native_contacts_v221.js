@@ -1,0 +1,18 @@
+"use strict";
+const fs=require("fs"),path=require("path"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments/nativeCalendar/api.js"),"utf8");
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+const ui=fs.readFileSync(path.join(root,"calendar/calendar.js"),"utf8");
+const html=fs.readFileSync(path.join(root,"calendar/calendar.html"),"utf8");
+assert.ok(api.includes('@mozilla.org/autocomplete/search;1?name=${backend}'),"must call Thunderbird native autocomplete service");
+assert.ok(api.includes('searchThunderbirdAutocomplete("addrbook", text)'),"must use Thunderbird addrbook autocomplete backend");
+assert.ok(api.includes('searchThunderbirdAutocomplete("ldap", text)'),"must support Thunderbird LDAP autocomplete backend");
+assert.ok(api.includes("MailServices.ab.directories"),"must retain direct native address-book enumeration fallback");
+assert.ok(api.includes("directory?.childCards"),"must inspect actual Thunderbird cards");
+assert.ok(bg.includes("browser.contacts.quickSearch(undefined, queryInfo)"),"official WebExtension quickSearch fallback must remain");
+assert.ok(bg.includes("browser.addressBooks.list(true)"),"full WebExtension enumeration fallback must remain");
+assert.ok(bg.includes('case "contactDiagnostics"'),"contact diagnostics runtime action missing");
+for (const id of ["contactTestInput","contactTestBtn","contactTestOutput"]) assert.ok(html.includes(`id="${id}"`),`missing ${id}`);
+assert.ok(ui.includes("async function testAddressBookSearch"),"settings address-book test must exercise the same search path");
+console.log("native attendee/address-book diagnostics V2.22: OK");

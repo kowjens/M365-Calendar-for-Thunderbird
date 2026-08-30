@@ -41,6 +41,12 @@
           <button id="nextBtn" class="icon-btn" data-i18n-title="nextMonth" data-i18n-aria-label="nextMonth" title="Nächster Monat" aria-label="Nächster Monat">›</button>
           <h2 id="monthTitle" class="month-title"></h2>
         </div>
+        <div id="viewModeSwitch" class="view-switch" role="group" aria-label="Calendar view">
+          <button type="button" class="secondary compact view-mode-btn" data-view="month" data-i18n="viewMonth">Monat</button>
+          <button type="button" class="secondary compact view-mode-btn" data-view="week" data-i18n="viewWeek">Woche</button>
+          <button type="button" class="secondary compact view-mode-btn" data-view="day" data-i18n="viewDay">Tag</button>
+          <button type="button" class="secondary compact view-mode-btn" data-view="agenda" data-i18n="viewAgenda">Agenda</button>
+        </div>
         <div class="toolbar-right">
           <label class="select-wrap">
             <span data-i18n="calendar">Kalender</span>
@@ -52,11 +58,14 @@
       </div>
 
       <div class="content-grid">
-        <section class="calendar-panel panel">
+        <section id="calendarPanel" class="calendar-panel panel">
+          <div id="monthViewContainer">
           <div class="weekday-row" aria-hidden="true">
             <div data-i18n="weekdayMon">Mo</div><div data-i18n="weekdayTue">Di</div><div data-i18n="weekdayWed">Mi</div><div data-i18n="weekdayThu">Do</div><div data-i18n="weekdayFri">Fr</div><div data-i18n="weekdaySat">Sa</div><div data-i18n="weekdaySun">So</div>
           </div>
           <div id="monthGrid" class="month-grid"></div>
+          </div>
+          <div id="periodView" class="period-view hidden"></div>
         </section>
 
         <aside class="agenda-panel panel">
@@ -93,7 +102,8 @@
         </label>
         <label>
           <span data-i18n="timeZone">Exchange-Zeitzone</span>
-          <input id="timeZoneInput" type="text" autocomplete="off" placeholder="W. Europe Standard Time">
+          <select id="timeZoneInput"></select>
+          <small data-i18n="timeZoneHelp">Graph/Exchange timezone.</small>
         </label>
         <label>
           <span data-i18n="autoSyncInterval">Automatische Synchronisation</span>
@@ -144,6 +154,26 @@
           <span id="nativeExperimentWarning" class="warning-text" data-i18n="nativeExperimentWarning">Hinweis: Diese Funktion verwendet eine privilegierte Thunderbird-Experiment-API.</span>
           <div class="button-row cache-actions">
             <button id="nativeSyncBtn" type="button" class="secondary compact" data-i18n="nativeSyncNow">Native Kalender synchronisieren</button>
+          </div>
+          <div class="contact-book-select-box">
+            <strong data-i18n="contactAddressBooksTitle">Adressbücher für Teilnehmer-Vorschläge</strong>
+            <small data-i18n="contactAddressBooksHelp">Mehrfachauswahl ist möglich. Nur ausgewählte Bücher werden bei der Live-Suche berücksichtigt.</small>
+            <select id="contactAddressBooksSelect" multiple size="7" aria-label="Address books"></select>
+            <div class="button-row contact-book-actions">
+              <button id="contactBooksAllBtn" type="button" class="secondary compact" data-i18n="contactAddressBooksAll">Alle auswählen</button>
+              <button id="contactBooksRecommendedBtn" type="button" class="secondary compact" data-i18n="contactAddressBooksRecommended">Autocomplete-Bücher</button>
+              <button id="contactBooksNoneBtn" type="button" class="secondary compact" data-i18n="contactAddressBooksNone">Keine</button>
+            </div>
+            <small id="contactAddressBooksStatus" class="muted"></small>
+          </div>
+          <div class="contact-test-box">
+            <strong data-i18n="contactTestTitle">Adressbuch-Test</strong>
+            <small data-i18n="contactTestHelp">Testet exakt dieselbe Suche wie das Teilnehmerfeld und zeigt den verwendeten Thunderbird-Backend-Pfad.</small>
+            <div class="contact-test-row">
+              <input id="contactTestInput" type="text" data-i18n-placeholder="contactTestPlaceholder" placeholder="Name oder E-Mail">
+              <button id="contactTestBtn" type="button" class="secondary compact" data-i18n="contactTestButton">Suchen</button>
+            </div>
+            <pre id="contactTestOutput" class="native-debug-text contact-test-output"></pre>
           </div>
         </div>
       </div>

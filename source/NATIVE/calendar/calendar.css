@@ -38,6 +38,7 @@ main { padding: 18px; }
 .month-title { margin: 0 0 0 6px; min-width: 180px; font-size: 19px; text-transform: capitalize; }
 .select-wrap { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 select, input, textarea {
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
   background: var(--panel-2); color: var(--text); outline: none;
 }
@@ -90,7 +91,7 @@ button:disabled { opacity: .5; cursor: default; }
 .welcome p { color: var(--muted); line-height: 1.5; }
 .centered { justify-content: center; margin-top: 22px; }
 
-.dialog { width: min(680px, calc(100vw - 38px)); max-height: min(92vh, 860px); border: 1px solid var(--line); border-radius: 16px; padding: 0; color: var(--text); background: var(--panel); box-shadow: 0 18px 70px rgba(0,0,0,.28); overflow: hidden; }
+.dialog { width: min(680px, calc(100vw - 38px)); max-width: calc(100vw - 24px); max-height: min(92vh, 860px); border: 1px solid var(--line); border-radius: 16px; padding: 0; color: var(--text); background: var(--panel); box-shadow: 0 18px 70px rgba(0,0,0,.28); overflow: hidden; }
 .dialog[open] { display: flex; flex-direction: column; }
 .dialog[open] > form { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; max-height: inherit; overflow: hidden; }
 .dialog-head, .dialog-foot { flex: 0 0 auto; background: var(--panel); }
@@ -103,11 +104,12 @@ button:disabled { opacity: .5; cursor: default; }
 .dialog-head p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
 
 .close-btn { width: 32px; height: 32px; padding: 0; border: 0; background: transparent; font-size: 24px; color: var(--muted); }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-width: 0; }
+.form-grid > *, .form-grid label { min-width: 0; }
 .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
 .form-grid .wide { grid-column: 1 / -1; }
 .form-grid small { color: var(--muted); line-height: 1.4; }
-.copy-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+.copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; min-width: 0; }
 .info-box { border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
 .check-row { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px !important; }
 .check-row input { width: auto; }
@@ -127,6 +129,11 @@ button:disabled { opacity: .5; cursor: default; }
 .toast { position: fixed; right: 20px; bottom: 20px; max-width: 440px; padding: 11px 14px; border-radius: 10px; background: #24272f; color: #fff; box-shadow: var(--shadow); font-size: 12px; z-index: 999; }
 .toast.error { background: #8f1d17; }
 .toast.success { background: #176b42; }
+
+@media (max-width: 720px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid .wide { grid-column: 1; }
+}
 
 @media (max-width: 980px) {
   .content-grid { grid-template-columns: 1fr; }
@@ -248,13 +255,17 @@ body.native-teams-popup .event-dialog::backdrop { background: var(--panel); }
 .attendee-suggestions {
   display: flex;
   flex-direction: column;
-  max-height: 190px;
+  max-height: min(230px, 34vh);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
   padding: 3px;
+  margin-top: 4px;
+  position: fixed;
+  z-index: 2147483000;
+  margin-top: 0;
 }
 .attendee-suggestion {
   display: grid;
@@ -277,3 +288,43 @@ body.native-teams-popup .event-dialog::backdrop { background: var(--panel); }
 .attendee-search-status.success { color: light-dark(#176b42, #73d7a6); }
 .attendee-search-status.error { color: light-dark(#a32626, #ff8b8b); }
 .attendee-search-status.empty { color: var(--muted); }
+
+/* V2.22 explicit address-book backend test in settings. */
+.contact-test-box { margin-top: 10px; display: grid; gap: 6px; }
+.contact-test-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.contact-test-output { max-height: 180px; overflow: auto; margin: 0; }
+@media (max-width: 620px) { .contact-test-row { grid-template-columns: 1fr; } }
+
+/* V2.27 selectable address books and unclipped attendee overlay. */
+.contact-book-select-box { margin-top: 10px; display: grid; gap: 7px; }
+#contactAddressBooksSelect { min-height: 150px; max-height: 240px; }
+.contact-book-actions { flex-wrap: wrap; }
+.attendee-suggestions { min-width: 260px; max-width: calc(100vw - 16px); }
+
+
+/* V2.29 Space calendar views */
+.view-switch { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.view-mode-btn.active { background: var(--accent, #4f6bed); color: white; border-color: transparent; }
+.period-view { min-height: 540px; display: grid; gap: 8px; }
+.period-view.week-view { grid-template-columns: repeat(7, minmax(120px, 1fr)); overflow-x: auto; align-items: stretch; }
+.period-view.day-view { grid-template-columns: minmax(0, 1fr); }
+.period-day { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); padding: 8px; display: flex; flex-direction: column; gap: 7px; }
+.period-day-title { border: 0; background: transparent; color: var(--text); font-weight: 700; text-align: left; padding: 3px 2px 7px; border-bottom: 1px solid var(--line); }
+.period-event { width: 100%; display: grid; grid-template-columns: auto minmax(0,1fr); column-gap: 8px; row-gap: 2px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); padding: 7px 8px; }
+.period-event:hover { background: var(--panel-2); }
+.period-event-time { grid-row: 1 / span 2; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.period-event strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.period-event small { color: var(--muted); overflow-wrap: anywhere; }
+.period-empty { padding: 18px 8px; color: var(--muted); font-size: 12px; }
+.content-grid.agenda-only { grid-template-columns: minmax(0, 1fr); }
+.content-grid.agenda-only .agenda-panel { max-height: none; min-height: 560px; }
+@media (max-width: 980px) { .view-switch { width: 100%; } .period-view.week-view { grid-template-columns: repeat(7, minmax(150px, 1fr)); } }
+
+/* V2.31 diagnostic export for Graph/Space vs. Thunderbird native cache. */
+.diagnostic-export-box { margin-top: 12px; display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid var(--line); }
+.diagnostic-range-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.diagnostic-range-grid label { display: grid; gap: 5px; }
+.diagnostic-export-actions { align-items: center; flex-wrap: wrap; }
+#diagnosticExportStatus.success { color: light-dark(#176b42, #73d7a6); }
+#diagnosticExportStatus.error { color: light-dark(#a32626, #ff8b8b); }
+@media (max-width: 620px) { .diagnostic-range-grid { grid-template-columns: 1fr; } }

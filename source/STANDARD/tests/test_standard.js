@@ -2,7 +2,7 @@
 const assert=require("assert"),fs=require("fs"),path=require("path");
 const root=path.resolve(__dirname,"..");
 const m=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"),"utf8"));
-assert.strictEqual(m.version,"2.0.19");
+assert.strictEqual(m.version,"2.0.32");
 assert.ok(!m.experiment_apis,"STANDARD must not contain experiment_apis");
 assert.ok(!fs.existsSync(path.join(root,"experiments")),"STANDARD must not contain Experiment source");
 const cfg=fs.readFileSync(path.join(root,"config/build-config.js"),"utf8");

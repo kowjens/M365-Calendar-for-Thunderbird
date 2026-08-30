@@ -1,0 +1,11 @@
+"use strict";
+const fs=require("fs"), path=require("path"), assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+const ui=fs.readFileSync(path.join(root,"calendar","calendar.js"),"utf8");
+assert.ok(bg.includes('earlyReturn = "quickSearch"'), 'quickSearch early return missing');
+assert.ok(bg.includes('CONTACT_AUTOCOMPLETE_CACHE_MS = 30000'), 'autocomplete cache missing');
+assert.ok(bg.includes('diagnostic: Boolean(message.diagnostic)'), 'diagnostic mode routing missing');
+assert.ok(ui.includes('api("searchContacts", { query, diagnostic: true })'), 'settings diagnostic must remain exhaustive');
+assert.ok(!ui.includes('token.includes("@") && /\\.[A-Za-z]{2,}$/.test(token)'), 'complete email must not suppress suggestions');
+console.log("V2.24 attendee latency contract passed");

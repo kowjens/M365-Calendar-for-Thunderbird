@@ -73,6 +73,10 @@ var nativeCalendar = class extends ExtensionCommon.ExtensionAPI {
           return true;
         },
 
+        async activate() {
+          return _m365NativeProviderCall(extension, "activate");
+        },
+
         async ensureCalendars(calendars) {
           return _m365NativeProviderCall(extension, "ensureCalendars", calendars || []);
         },
@@ -101,8 +105,24 @@ var nativeCalendar = class extends ExtensionCommon.ExtensionAPI {
           );
         },
 
+        async upsertCalendarEvent(graphCalendarId, event) {
+          return _m365NativeProviderCall(extension, "upsertCalendarEvent", String(graphCalendarId || ""), event || {});
+        },
+
+        async removeCalendarEvent(graphCalendarId, eventId) {
+          return _m365NativeProviderCall(extension, "removeCalendarEvent", String(graphCalendarId || ""), String(eventId || ""));
+        },
+
         async reloadViews(reason) {
           return _m365NativeProviderCall(extension, "reloadViews", String(reason || "manual"));
+        },
+
+        async listAddressBooks() {
+          return _m365NativeProviderCall(extension, "listAddressBooks");
+        },
+
+        async searchAddressBook(query, addressBookIds) {
+          return _m365NativeProviderCall(extension, "searchAddressBook", String(query || ""), Array.isArray(addressBookIds) ? addressBookIds : ["*"]);
         },
 
         async status() {
@@ -110,6 +130,10 @@ var nativeCalendar = class extends ExtensionCommon.ExtensionAPI {
             return [];
           }
           return _m365NativeProviderCall(extension, "status");
+        },
+
+        async exportDiagnostics(graphCalendarId, start, end) {
+          return _m365NativeProviderCall(extension, "exportDiagnostics", String(graphCalendarId || ""), String(start || ""), String(end || ""));
         },
 
         async diagnostics() {
@@ -178,7 +202,7 @@ var nativeCalendar = class extends ExtensionCommon.ExtensionAPI {
     const extension = _m365NativeExtension || this.extension;
     if (_m365NativeProviderModule?.shutdown && extension) {
       try {
-        const result = _m365NativeProviderModule.shutdown(extension);
+        const result = _m365NativeProviderModule.shutdown(extension, Boolean(isAppShutdown));
         if (result?.catch) {
           result.catch(error => console.warn("M365 native shutdown failed", error));
         }
@@ -212,9 +236,17 @@ function _m365NativeCreateProviderRuntime() {
     throw new Error("Thunderbird globalThis.Services is unavailable in the Experiment scope");
   }
   const { cal } = ChromeUtils.importESModule("resource:///modules/calendar/calUtils.sys.mjs");
+  const { setTimeout: nativeSetTimeout, clearTimeout: nativeClearTimeout } = ChromeUtils.importESModule("resource://gre/modules/Timer.sys.mjs");
   const { CalEvent } = ChromeUtils.importESModule("resource:///modules/CalEvent.sys.mjs");
   const { CalAttendee } = ChromeUtils.importESModule("resource:///modules/CalAttendee.sys.mjs");
   const { CalAlarm } = ChromeUtils.importESModule("resource:///modules/CalAlarm.sys.mjs");
+  const { CalDateTime } = ChromeUtils.importESModule("resource:///modules/CalDateTime.sys.mjs");
+  let MailServices = null;
+  try {
+    ({ MailServices } = ChromeUtils.importESModule("resource:///modules/MailServices.sys.mjs"));
+  } catch (error) {
+    console.warn("M365 native MailServices import failed; identity/address-book integration will use WebExtension fallbacks", error);
+  }
 
   /* M365 native Thunderbird calendar provider implementation.
    * Loaded lazily by api.js so provider incompatibilities cannot break the add-on UI.
@@ -226,6 +258,218 @@ function _m365NativeCreateProviderRuntime() {
   const PROP_ACCOUNT_ID = "m365.accountId";
   const PROP_ORGANIZER_ID = "m365.organizerId";
   const PROP_ORGANIZER_NAME = "m365.organizerName";
+
+  // Thunderbird persists normal calendar UI properties in calendar.registry.*.
+  // V2.22 keeps those registry branches intact across normal shutdown. This
+  // provider-owned store is now only a safety backup for explicit removal/re-login
+  // and for migration from older versions that used to unregister calendars.
+  const USER_PREF_PROPERTIES = new Set([
+    "color",
+    "disabled",
+    "calendar-main-in-composite",
+    "suppressAlarms",
+    "imip.identity.key",
+    "notifications.times",
+  ]);
+  const PREF_PROPERTY_KEYS = {
+    color: "color",
+    disabled: "disabled",
+    "calendar-main-in-composite": "visible",
+    suppressAlarms: "suppressAlarms",
+    "imip.identity.key": "identityKey",
+    "notifications.times": "notificationsTimes",
+  };
+  let programmaticCalendarMutationDepth = 0;
+
+  function nativePrefsName(extension) {
+    const id = safeString(extension?.id || "m365-calendar").replace(/[^A-Za-z0-9_.-]/g, "_");
+    return `extensions.m365CalendarNative.${id}.userPrefs`;
+  }
+
+  function loadNativeUserPrefs(extension) {
+    const empty = { version: 1, calendars: {} };
+    try {
+      const raw = Services.prefs.getStringPref(nativePrefsName(extension), "");
+      if (!raw) return empty;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return empty;
+      if (!parsed.calendars || typeof parsed.calendars !== "object") parsed.calendars = {};
+      parsed.version = 1;
+      return parsed;
+    } catch (_) {
+      return empty;
+    }
+  }
+
+  function saveNativeUserPrefs(extension, data) {
+    try {
+      Services.prefs.setStringPref(nativePrefsName(extension), JSON.stringify(data || { version: 1, calendars: {} }));
+      return true;
+    } catch (error) {
+      console.warn("M365 native calendar preferences could not be saved", error);
+      return false;
+    }
+  }
+
+  function withProgrammaticCalendarMutation(fn) {
+    programmaticCalendarMutationDepth += 1;
+    try {
+      return fn();
+    } finally {
+      programmaticCalendarMutationDepth = Math.max(0, programmaticCalendarMutationDepth - 1);
+    }
+  }
+
+  function ownCalendarProperty(calendar, name) {
+    const raw = rawCalendar(calendar);
+    try {
+      return calendar?.getProperty?.(name) ?? raw?.getProperty?.(name) ?? null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function graphCalendarIdFor(calendar) {
+    return safeString(ownCalendarProperty(calendar, PROP_GRAPH_ID));
+  }
+
+  function snapshotCalendarUserPrefs(extension, calendar) {
+    if (!calendar || !isOwnCalendar(calendar, extension)) return false;
+    const graphId = graphCalendarIdFor(calendar);
+    if (!graphId) return false;
+    const store = loadNativeUserPrefs(extension);
+    const existing = store.calendars[graphId] || {};
+    const rawNotificationsTimes = ownCalendarProperty(calendar, "notifications.times");
+    let notificationsTimes = null;
+    try {
+      notificationsTimes = rawNotificationsTimes == null
+        ? null
+        : JSON.parse(JSON.stringify(rawNotificationsTimes));
+    } catch (_) {
+      notificationsTimes = null;
+    }
+    store.calendars[graphId] = {
+      ...existing,
+      color: safeString(ownCalendarProperty(calendar, "color") || ""),
+      disabled: Boolean(ownCalendarProperty(calendar, "disabled")),
+      visible: ownCalendarProperty(calendar, "calendar-main-in-composite") !== false,
+      suppressAlarms: Boolean(ownCalendarProperty(calendar, "suppressAlarms")),
+      identityKey: safeString(ownCalendarProperty(calendar, "imip.identity.key") || ""),
+      notificationsTimes: notificationsTimes == null ? null : notificationsTimes,
+    };
+    return saveNativeUserPrefs(extension, store);
+  }
+
+  function snapshotAllCalendarUserPrefs(extension) {
+    try {
+      for (const calendar of cal.manager.getCalendars().filter(item => isOwnCalendar(item, extension))) {
+        snapshotCalendarUserPrefs(extension, calendar);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function deleteSavedCalendarProperty(extension, calendar, propertyName) {
+    const graphId = graphCalendarIdFor(calendar);
+    const key = PREF_PROPERTY_KEYS[propertyName];
+    if (!graphId || !key) return;
+    const store = loadNativeUserPrefs(extension);
+    const prefs = store.calendars[graphId];
+    if (!prefs || !Object.prototype.hasOwnProperty.call(prefs, key)) return;
+    delete prefs[key];
+    store.calendars[graphId] = prefs;
+    saveNativeUserPrefs(extension, store);
+  }
+
+  function toPlainArray(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try { return Array.from(value); } catch (_) {}
+    try {
+      const result = [];
+      const length = Number(value.length || 0);
+      for (let i = 0; i < length; i += 1) {
+        result.push(value.queryElementAt ? value.queryElementAt(i, Ci.nsISupports) : value[i]);
+      }
+      return result;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function allMailIdentities() {
+    try { return toPlainArray(MailServices?.accounts?.allIdentities); } catch (_) { return []; }
+  }
+
+  function identityForKey(key) {
+    const wanted = safeString(key);
+    if (!wanted) return null;
+    return allMailIdentities().find(identity => safeString(identity?.key) === wanted) || null;
+  }
+
+  function identityForEmail(email) {
+    const wanted = normalizeMail(email);
+    if (!wanted) return null;
+    return allMailIdentities().find(identity => normalizeMail(identity?.email) === wanted) || null;
+  }
+
+  function accountForIdentity(identity) {
+    if (!identity) return null;
+    try {
+      for (const account of toPlainArray(MailServices?.accounts?.accounts)) {
+        if (toPlainArray(account?.identities).some(candidate => safeString(candidate?.key) === safeString(identity.key))) {
+          return account;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function savedCalendarUserPrefs(extension, graphId) {
+    const store = loadNativeUserPrefs(extension);
+    const value = store.calendars[safeString(graphId)];
+    return value && typeof value === "object" ? value : null;
+  }
+
+  function applySavedCalendarUserPrefs(extension, calendar, descriptor, isNew) {
+    const prefs = savedCalendarUserPrefs(extension, descriptor.graphCalendarId);
+    withProgrammaticCalendarMutation(() => {
+      // New calendars use Graph metadata only as a default. Existing calendars
+      // keep their current user-selected colour/state. Persisted values win when
+      // a calendar is recreated on a later Thunderbird start.
+      if (isNew) {
+        calendar.setProperty("color", prefs && Object.prototype.hasOwnProperty.call(prefs, "color")
+          ? prefs.color
+          : (descriptor.color || "#4f6bed"));
+        calendar.setProperty("disabled", prefs && Object.prototype.hasOwnProperty.call(prefs, "disabled")
+          ? Boolean(prefs.disabled)
+          : descriptor.enabled === false);
+        calendar.setProperty("calendar-main-in-composite", prefs && Object.prototype.hasOwnProperty.call(prefs, "visible")
+          ? Boolean(prefs.visible)
+          : descriptor.visible !== false);
+        calendar.setProperty("suppressAlarms", prefs && Object.prototype.hasOwnProperty.call(prefs, "suppressAlarms")
+          ? Boolean(prefs.suppressAlarms)
+          : false);
+        if (prefs && Object.prototype.hasOwnProperty.call(prefs, "notificationsTimes") && prefs.notificationsTimes != null) {
+          calendar.setProperty("notifications.times", prefs.notificationsTimes);
+        }
+      }
+
+      // The native Thunderbird calendar properties dialog expects
+      // imip.identity to resolve from imip.identity.key. Select the mail account
+      // whose address matches the signed-in M365 user by default, but preserve an
+      // explicit saved choice (including an intentionally empty/None selection).
+      let identityKey = null;
+      if (prefs && Object.prototype.hasOwnProperty.call(prefs, "identityKey")) {
+        identityKey = safeString(prefs.identityKey);
+      } else if (isNew || !safeString(calendar.getProperty("imip.identity.key"))) {
+        identityKey = safeString(identityForEmail(descriptor.organizerId)?.key || "");
+      }
+      if (identityKey !== null) calendar.setProperty("imip.identity.key", identityKey);
+    });
+  }
 
   function calendarStartupReady() {
     try {
@@ -328,18 +572,32 @@ function _m365NativeCreateProviderRuntime() {
 
   function isoToDateTime(value, allDay = false) {
     if (!value) return null;
+    if (allDay) {
+      // A Graph all-day event is a calendar date, not an instant. Construct it
+      // directly so the host machine timezone cannot move it to another day.
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+      if (!match) return null;
+      const dt = new CalDateTime();
+      dt.resetTo(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, cal.dtz.UTC);
+      dt.isDate = true;
+      return dt;
+    }
     const date = new Date(value);
     if (!Number.isFinite(date.getTime())) return null;
-    const dt = cal.dtz.jsDateToDateTime(date, cal.dtz.UTC);
-    if (allDay) {
-      dt.isDate = true;
-    }
-    return dt;
+    // Do not pass UTC as the second parameter: Thunderbird then interprets the
+    // JS Date's *local wall-clock fields* as UTC. Preserve the instant first,
+    // then convert the resulting CalDateTime to UTC.
+    return cal.dtz.jsDateToDateTime(date).getInTimezone(cal.dtz.UTC);
   }
 
   function normalizeMail(value) {
     return safeString(value).replace(/^mailto:/i, "").trim().toLowerCase();
   }
+
+  // V2.28 native mapping schema. Graph changeKey does not change when only
+  // our Thunderbird-side representation changes, so cache migration must be
+  // tracked separately from server content.
+  const NATIVE_MAPPING_VERSION = "2.32-full-cache-readopt";
 
   function attendeeToPlain(attendee) {
     if (!attendee) return null;
@@ -367,13 +625,16 @@ function _m365NativeCreateProviderRuntime() {
   }
 
   function itemToPlain(item) {
+    const syntheticSelfMirror = safeString(item?.getProperty?.("X-M365-SYNTHETIC-SELF")).toUpperCase() === "TRUE";
     const attendees = [];
-    try {
-      for (const attendee of item.getAttendees() || []) {
-        const converted = attendeeToPlain(attendee);
-        if (converted?.address) attendees.push(converted);
-      }
-    } catch (_) {}
+    if (!syntheticSelfMirror) {
+      try {
+        for (const attendee of item.getAttendees() || []) {
+          const converted = attendeeToPlain(attendee);
+          if (converted?.address) attendees.push(converted);
+        }
+      } catch (_) {}
+    }
 
     let categories = [];
     try { categories = item.getCategories() || []; } catch (_) {}
@@ -406,6 +667,8 @@ function _m365NativeCreateProviderRuntime() {
       reminderMinutes: reminderMinutes == null ? undefined : reminderMinutes,
       isCancelled: safeString(item.status).toUpperCase() === "CANCELLED",
       isOnlineMeeting: Boolean(item.getProperty("X-M365-ONLINE")),
+      isAppointment: safeString(item.getProperty("X-M365-APPOINTMENT")).toUpperCase() === "TRUE",
+      nativeSelfMirror: syntheticSelfMirror,
       isOrganizer: safeString(item.getProperty("X-M365-IS-ORGANIZER")).toUpperCase() === "TRUE",
       responseStatus: safeString(item.getProperty("X-M365-RESPONSE")),
       graphType: safeString(item.getProperty("X-M365-GRAPH-TYPE")),
@@ -448,12 +711,14 @@ function _m365NativeCreateProviderRuntime() {
     if (data?.url) item.setProperty("URL", safeString(data.url));
     if (data?.webLink) item.setProperty("X-M365-WEBLINK", safeString(data.webLink));
     if (data?.isOnlineMeeting) item.setProperty("X-M365-ONLINE", "TRUE");
+    if (data?.isAppointment) item.setProperty("X-M365-APPOINTMENT", "TRUE");
     if (data?.isOrganizer) item.setProperty("X-M365-IS-ORGANIZER", "TRUE");
     if (data?.responseStatus) item.setProperty("X-M365-RESPONSE", safeString(data.responseStatus));
     if (data?.graphType) item.setProperty("X-M365-GRAPH-TYPE", safeString(data.graphType));
     if (data?.seriesMasterId) item.setProperty("X-M365-SERIES-MASTER-ID", safeString(data.seriesMasterId));
     if (data?.changeKey) item.setProperty("X-M365-CHANGEKEY", safeString(data.changeKey));
     if (data?.iCalUId) item.setProperty("X-M365-ICALUID", safeString(data.iCalUId));
+    item.setProperty("X-M365-NATIVE-MAP-VERSION", NATIVE_MAPPING_VERSION);
 
     if (data?.status) item.status = safeString(data.status).toUpperCase();
     if (data?.privacy) item.privacy = safeString(data.privacy).toUpperCase();
@@ -462,12 +727,42 @@ function _m365NativeCreateProviderRuntime() {
 
     try { item.setCategories((data?.categories || []).map(safeString)); } catch (_) {}
 
-    if (data?.organizer?.address) {
-      item.organizer = plainToAttendee(data.organizer, true);
+    const calendarSelfAddress = normalizeMail(calendar?.getProperty?.(PROP_ORGANIZER_ID));
+    const calendarSelfName = safeString(calendar?.getProperty?.(PROP_ORGANIZER_NAME));
+    let organizerData = data?.organizer?.address ? data.organizer : null;
+    // Appointments are always the signed-in user's own calendar objects. Use
+    // the calendar identity for the native mirror even if Graph exposes the
+    // organizer through another SMTP/UPN alias. This prevents Thunderbird from
+    // misclassifying a personal appointment as an invitation from another user.
+    if (data?.isAppointment && calendarSelfAddress) {
+      organizerData = { address: calendarSelfAddress, name: calendarSelfName, role: "CHAIR", status: "ACCEPTED", rsvp: false, type: "INDIVIDUAL" };
     }
-    for (const attendeeData of data?.attendees || []) {
-      const attendee = plainToAttendee(attendeeData, false);
-      if (attendee) item.addAttendee(attendee);
+    if (organizerData?.address) {
+      item.organizer = plainToAttendee(organizerData, true);
+    }
+
+    // V2.27 native-render mirror: on the user's real Thunderbird installation
+    // scheduled/online items render reliably while otherwise equivalent personal
+    // appointments do not. Mirror a plain appointment through the same accepted
+    // scheduling shape by adding the owner as a synthetic attendee. The marker
+    // makes itemToPlain() strip this attendee before any Graph PATCH/POST.
+    const sourceAttendees = Array.isArray(data?.attendees) ? data.attendees : [];
+    if (data?.isAppointment && sourceAttendees.length === 0 && calendarSelfAddress) {
+      const selfAttendee = plainToAttendee({
+        address: calendarSelfAddress,
+        name: calendarSelfName,
+        role: "REQ-PARTICIPANT",
+        status: "ACCEPTED",
+        rsvp: false,
+        type: "INDIVIDUAL"
+      }, false);
+      if (selfAttendee) item.addAttendee(selfAttendee);
+      item.setProperty("X-M365-SYNTHETIC-SELF", "TRUE");
+    } else {
+      for (const attendeeData of sourceAttendees) {
+        const attendee = plainToAttendee(attendeeData, false);
+        if (attendee) item.addAttendee(attendee);
+      }
     }
     if (data?.reminderMinutes != null) addReminder(item, data.reminderMinutes);
     return item;
@@ -498,6 +793,22 @@ function _m365NativeCreateProviderRuntime() {
     lastError: "",
     trace: []
   };
+  const nativeDirectEventStats = {
+    upserts: 0,
+    removes: 0,
+    lastCalendarId: "",
+    lastEventId: "",
+    lastOperation: "",
+    lastStored: false,
+    lastTitle: "",
+    lastStart: "",
+    lastEnd: "",
+    lastAppointment: false,
+    lastOnlineMeeting: false,
+    lastSyntheticSelf: false,
+    lastError: ""
+  };
+
   const nativeSyncStats = {
     lastStartedAt: "",
     lastFinishedAt: "",
@@ -507,13 +818,37 @@ function _m365NativeCreateProviderRuntime() {
     cacheModifies: 0,
     cacheDeletes: 0,
     cacheUnchanged: 0,
+    cacheMappingRepairs: 0,
+    cacheVisibilityRepairs: 0,
     cacheItems: 0,
+    graphAppointments: 0,
+    graphOnlineMeetings: 0,
+    graphOtherMeetings: 0,
+    cacheAppointments: 0,
+    cacheOnlineMeetings: 0,
+    cacheOtherMeetings: 0,
+    cacheSyntheticSelf: 0,
     directPushes: 0,
     lastGraphCalendarId: "",
     mode: "",
     message: "",
     error: ""
   };
+
+  // Serialize every writer for one Graph calendar. Thunderbird's own
+  // "Reload Calendars and Changes" can invoke provider replay while the
+  // WebExtension also performs a direct cache push; running both concurrently
+  // corrupts the observer lifecycle even if the SQLite rows are eventually sane.
+  const nativeCalendarSyncLocks = new Map();
+  function withCalendarSyncLock(graphCalendarId, task) {
+    const key = safeString(graphCalendarId) || "__unknown__";
+    const previous = nativeCalendarSyncLocks.get(key) || Promise.resolve();
+    const run = previous.catch(() => {}).then(task);
+    nativeCalendarSyncLocks.set(key, run);
+    return run.finally(() => {
+      if (nativeCalendarSyncLocks.get(key) === run) nativeCalendarSyncLocks.delete(key);
+    });
+  }
 
   // V2.18: Thunderbird can leave stale event DOM nodes behind when a cached
   // provider calendar is removed from and added back to the composite view.
@@ -586,12 +921,22 @@ function _m365NativeCreateProviderRuntime() {
       onDeleteItem() {},
       onError() {},
       onPropertyChanged(calendar, name, value) {
-        if (name !== "calendar-main-in-composite" || !isOwnCalendar(calendar, extension)) return;
-        scheduleCalendarViewReload(value ? "visibility:show" : "visibility:hide");
+        if (!isOwnCalendar(calendar, extension)) return;
+        if (programmaticCalendarMutationDepth === 0 && USER_PREF_PROPERTIES.has(name)) {
+          snapshotCalendarUserPrefs(extension, calendar);
+        }
+        if (name === "calendar-main-in-composite" && programmaticCalendarMutationDepth === 0) {
+          scheduleCalendarViewReload(value ? "visibility:show" : "visibility:hide");
+        }
       },
       onPropertyDeleting(calendar, name) {
-        if (name !== "calendar-main-in-composite" || !isOwnCalendar(calendar, extension)) return;
-        scheduleCalendarViewReload("visibility:hide");
+        if (!isOwnCalendar(calendar, extension)) return;
+        if (programmaticCalendarMutationDepth === 0 && USER_PREF_PROPERTIES.has(name)) {
+          deleteSavedCalendarProperty(extension, calendar, name);
+        }
+        if (name === "calendar-main-in-composite" && programmaticCalendarMutationDepth === 0) {
+          scheduleCalendarViewReload("visibility:hide");
+        }
       }
     };
     cal.manager.addCalendarObserver(nativeVisibilityObserver);
@@ -1048,6 +1393,21 @@ function _m365NativeCreateProviderRuntime() {
           return super.getProperty(PROP_ORGANIZER_NAME) || null;
         case "imip.identity.disabled":
           return false;
+        case "imip.identity": {
+          const graphId = safeString(super.getProperty(PROP_GRAPH_ID));
+          const saved = savedCalendarUserPrefs(this.extension, graphId);
+          if (saved && Object.prototype.hasOwnProperty.call(saved, "identityKey")) {
+            return identityForKey(saved.identityKey);
+          }
+          const key = safeString(super.getProperty("imip.identity.key"));
+          if (key) return identityForKey(key);
+          // If no key has ever been stored, use the identity matching the M365
+          // organizer as a sensible initial selection in Thunderbird's calendar
+          // properties dialog.
+          return identityForEmail(super.getProperty(PROP_ORGANIZER_ID));
+        }
+        case "imip.account":
+          return accountForIdentity(this.getProperty("imip.identity"));
         case "itip.transport":
           return new NoEmailTransport();
         default:
@@ -1149,10 +1509,14 @@ function _m365NativeCreateProviderRuntime() {
     }
 
     resetLog() {
-      this.mObservers.notify("onLoad", [this]);
+      // calCachedCalendar calls resetLog() while rebuilding a changelog cache.
+      // Emitting onLoad here causes the wrapper to synchronize again, which can
+      // overlap the active replay and duplicate visible items.
     }
 
     async replayChangesOn(listener) {
+      const graphCalendarId = safeString(this.getProperty(PROP_GRAPH_ID));
+      return withCalendarSyncLock(graphCalendarId, async () => {
       nativeSyncStats.lastStartedAt = new Date().toISOString();
       nativeSyncStats.lastFinishedAt = "";
       nativeSyncStats.graphEvents = 0;
@@ -1161,12 +1525,20 @@ function _m365NativeCreateProviderRuntime() {
       nativeSyncStats.cacheModifies = 0;
       nativeSyncStats.cacheDeletes = 0;
       nativeSyncStats.cacheUnchanged = 0;
+      nativeSyncStats.cacheMappingRepairs = 0;
+      nativeSyncStats.cacheVisibilityRepairs = 0;
       nativeSyncStats.cacheItems = 0;
+      nativeSyncStats.graphAppointments = 0;
+      nativeSyncStats.graphOnlineMeetings = 0;
+      nativeSyncStats.graphOtherMeetings = 0;
+      nativeSyncStats.cacheAppointments = 0;
+      nativeSyncStats.cacheOnlineMeetings = 0;
+      nativeSyncStats.cacheOtherMeetings = 0;
+      nativeSyncStats.cacheSyntheticSelf = 0;
       nativeSyncStats.lastGraphCalendarId = safeString(this.getProperty(PROP_GRAPH_ID));
       nativeSyncStats.mode = "provider-replay";
       nativeSyncStats.message = "";
       nativeSyncStats.error = "";
-      this.offlineStorage.startBatch();
       try {
         const results = await this.extension.emit("nativeCalendar.onSync", calendarDescriptor(this));
         const result = firstUsefulResult(results);
@@ -1174,6 +1546,9 @@ function _m365NativeCreateProviderRuntime() {
           throw new Error("Microsoft 365 native sync returned no event snapshot");
         }
         nativeSyncStats.graphEvents = result.events.length;
+        nativeSyncStats.graphAppointments = result.events.filter(event => Boolean(event?.isAppointment)).length;
+        nativeSyncStats.graphOnlineMeetings = result.events.filter(event => Boolean(event?.isOnlineMeeting)).length;
+        nativeSyncStats.graphOtherMeetings = result.events.filter(event => !event?.isAppointment && !event?.isOnlineMeeting).length;
 
         // Reconcile the Thunderbird offline snapshot by stable Graph ID. This
         // preserves the observer lifecycle required by the active calendar view
@@ -1183,9 +1558,16 @@ function _m365NativeCreateProviderRuntime() {
         nativeSyncStats.cacheModifies = syncStats.modifies;
         nativeSyncStats.cacheDeletes = syncStats.deletes;
         nativeSyncStats.cacheUnchanged = syncStats.unchanged;
+        nativeSyncStats.cacheMappingRepairs = syncStats.mappingRepairs || 0;
+        nativeSyncStats.cacheVisibilityRepairs = syncStats.visibilityRepairs || 0;
         nativeSyncStats.cacheWrites = syncStats.adds + syncStats.modifies + syncStats.deletes;
         nativeSyncStats.cacheItems = await countOfflineEvents(this.offlineStorage);
-        nativeSyncStats.message = `${result.message || ""}${result.message ? " · " : ""}+${syncStats.adds} ~${syncStats.modifies} -${syncStats.deletes} =${syncStats.unchanged}`;
+        const cacheKinds = await classifyOfflineEvents(this.offlineStorage);
+        nativeSyncStats.cacheAppointments = cacheKinds.appointments;
+        nativeSyncStats.cacheOnlineMeetings = cacheKinds.onlineMeetings;
+        nativeSyncStats.cacheOtherMeetings = cacheKinds.otherMeetings;
+        nativeSyncStats.cacheSyntheticSelf = cacheKinds.syntheticSelf;
+        nativeSyncStats.message = `${result.message || ""}${result.message ? " · " : ""}+${syncStats.adds} ~${syncStats.modifies} -${syncStats.deletes} =${syncStats.unchanged} repair=${syncStats.mappingRepairs || 0} visibility=${syncStats.visibilityRepairs || 0}`;
         nativeSyncStats.lastFinishedAt = new Date().toISOString();
         listener.onResult({ status: Cr.NS_OK }, result.message || null);
       } catch (error) {
@@ -1194,16 +1576,19 @@ function _m365NativeCreateProviderRuntime() {
         console.error("M365 native calendar sync failed", error);
         listener.onResult({ status: error?.result || Cr.NS_ERROR_FAILURE }, error?.message || String(error));
       } finally {
-        this.offlineStorage.endBatch();
+        scheduleCalendarViewReload("provider-replay");
       }
+      });
     }
   }
 
   async function listOfflineEvents(offlineStorage) {
     if (!offlineStorage) return [];
     const result = [];
-    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT |
-      Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES;
+    // Reconciliation must compare the rows actually stored in offlineStorage.
+    // Expanded recurrence occurrences can share/derive IDs and must not be
+    // treated as additional cached parent items.
+    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
     for await (const items of cal.iterate.streamValues(
       offlineStorage.getItems(filter, 0, null, null)
     )) {
@@ -1244,6 +1629,42 @@ function _m365NativeCreateProviderRuntime() {
     ]);
   }
 
+  function nativeMappingConforms(item, data, calendar) {
+    const boolProp = name => safeString(item?.getProperty?.(name)).toUpperCase() === "TRUE";
+    const expectedAppointment = Boolean(data?.isAppointment);
+    const expectedOnline = Boolean(data?.isOnlineMeeting);
+    if (boolProp("X-M365-APPOINTMENT") !== expectedAppointment) return false;
+    if (boolProp("X-M365-ONLINE") !== expectedOnline) return false;
+
+    // V2.32: the V2.31 diagnostic proved that Graph and cache.sqlite can both
+    // contain an event while Thunderbird's active native view still renders
+    // almost nothing.  The sole consistently visible legacy row had never been
+    // rewritten by the V2.28-V2.30 mapping migrations.  Gate *all* event kinds
+    // on one mapping version so every M365 row receives one clean delete/adopt
+    // lifecycle after upgrade, including Teams meetings and Graph occurrences.
+    if (safeString(item?.getProperty?.("X-M365-NATIVE-MAP-VERSION")) !== NATIVE_MAPPING_VERSION) return false;
+
+    if (expectedAppointment) {
+      const selfAddress = normalizeMail(calendar?.getProperty?.(PROP_ORGANIZER_ID));
+      const sourceAttendees = Array.isArray(data?.attendees) ? data.attendees : [];
+      const expectedSyntheticSelf = sourceAttendees.length === 0 && Boolean(selfAddress);
+      if (boolProp("X-M365-SYNTHETIC-SELF") !== expectedSyntheticSelf) return false;
+      if (expectedSyntheticSelf) {
+        const organizerAddress = normalizeMail(item?.organizer?.id);
+        if (!organizerAddress || organizerAddress !== selfAddress) return false;
+        let hasAcceptedSelf = false;
+        try {
+          hasAcceptedSelf = (item.getAttendees() || []).some(attendee =>
+            normalizeMail(attendee?.id) === selfAddress &&
+            safeString(attendee?.participationStatus).toUpperCase() === "ACCEPTED"
+          );
+        } catch (_) {}
+        if (!hasAcceptedSelf) return false;
+      }
+    }
+    return true;
+  }
+
   async function reconcileOfflineStorage(offlineStorage, events, calendar) {
     const desired = new Map();
     let duplicateGraphIds = 0;
@@ -1269,6 +1690,8 @@ function _m365NativeCreateProviderRuntime() {
       modifies: 0,
       deletes: 0,
       unchanged: 0,
+      mappingRepairs: 0,
+      visibilityRepairs: 0,
       duplicateGraphIds,
       duplicateCachedIds: duplicateCachedItems.length
     };
@@ -1299,18 +1722,40 @@ function _m365NativeCreateProviderRuntime() {
 
       const newChangeKey = safeString(data?.changeKey);
       const oldChangeKey = cachedChangeKey(oldItem);
-      const unchanged = newChangeKey && oldChangeKey
-        ? newChangeKey === oldChangeKey
-        : itemFallbackSignature(oldItem) === dataFallbackSignature(data);
+      // V2.22: a Graph changeKey only tells us whether the server object changed;
+      // it does not tell us whether our client-side conversion changed. Time-zone
+      // fixes (or other mapping fixes) must therefore rewrite an existing cached
+      // item even when Graph reports the same changeKey. Require the local
+      // fallback signature to match as well.
+      const signatureUnchanged = itemFallbackSignature(oldItem) === dataFallbackSignature(data);
+      const mappingConforms = nativeMappingConforms(oldItem, data, calendar);
+      const graphContentUnchanged = newChangeKey && oldChangeKey
+        ? newChangeKey === oldChangeKey && signatureUnchanged
+        : signatureUnchanged;
+      const unchanged = graphContentUnchanged && mappingConforms;
       if (unchanged) {
         stats.unchanged += 1;
         continue;
       }
 
+      const mappingRepair = graphContentUnchanged && !mappingConforms;
+      if (mappingRepair) stats.mappingRepairs += 1;
       const newItem = plainToItem(data, calendar);
-      try { newItem.generation = oldItem.generation; } catch (_) {}
-      await offlineStorage.modifyItem(newItem, oldItem);
-      stats.modifies += 1;
+      // V2.32: recreate every row during the one-time mapping migration.
+      // Thunderbird's CalCachedCalendar serves the visible UI directly from
+      // mCachedCalendar/cache.sqlite.  A delete/adopt cycle therefore repairs
+      // both storage-row shape and the observer lifecycle for all event kinds.
+      if (mappingRepair) {
+        await offlineStorage.deleteItem(oldItem);
+        await offlineStorage.adoptItem(newItem);
+        stats.deletes += 1;
+        stats.adds += 1;
+        stats.visibilityRepairs += 1;
+      } else {
+        try { newItem.generation = oldItem.generation; } catch (_) {}
+        await offlineStorage.modifyItem(newItem, oldItem);
+        stats.modifies += 1;
+      }
     }
     return stats;
   }
@@ -1318,14 +1763,126 @@ function _m365NativeCreateProviderRuntime() {
   async function countOfflineEvents(offlineStorage) {
     if (!offlineStorage) return 0;
     let count = 0;
-    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT |
-      Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES;
+    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
     for await (const items of cal.iterate.streamValues(
       offlineStorage.getItems(filter, 0, null, null)
     )) {
       count += Array.isArray(items) ? items.length : 0;
     }
     return count;
+  }
+
+  async function classifyOfflineEvents(offlineStorage) {
+    const stats = { total: 0, appointments: 0, onlineMeetings: 0, otherMeetings: 0, syntheticSelf: 0 };
+    if (!offlineStorage) return stats;
+    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
+    for await (const items of cal.iterate.streamValues(offlineStorage.getItems(filter, 0, null, null))) {
+      for (const item of items || []) {
+        stats.total += 1;
+        const appointment = safeString(item?.getProperty?.("X-M365-APPOINTMENT")).toUpperCase() === "TRUE";
+        const online = safeString(item?.getProperty?.("X-M365-ONLINE")).toUpperCase() === "TRUE";
+        if (appointment) stats.appointments += 1;
+        if (online) stats.onlineMeetings += 1;
+        if (!appointment && !online) stats.otherMeetings += 1;
+        if (safeString(item?.getProperty?.("X-M365-SYNTHETIC-SELF")).toUpperCase() === "TRUE") stats.syntheticSelf += 1;
+      }
+    }
+    return stats;
+  }
+
+  async function upsertCalendarEventUnlocked(extension, graphCalendarId, data) {
+    resetTrace("upsertCalendarEvent");
+    await stage("waitForCalendarStartup", () => waitForCalendarStartup());
+    ensureProviderRegistered(extension);
+    const calendar = stageSync(`findNativeCalendar:${graphCalendarId}`, () => findCalendarByGraphId(extension, graphCalendarId));
+    if (!calendar) throw new Error(`No registered Thunderbird calendar for Graph calendar ${graphCalendarId}`);
+    const raw = rawCalendar(calendar);
+    const offlineStorage = raw?.offlineStorage || calendar?.wrappedJSObject?.mCachedCalendar || null;
+    if (!offlineStorage) throw new Error(`Thunderbird offlineStorage is unavailable for ${calendar.name || graphCalendarId}`);
+    const id = safeString(data?.id);
+    if (!id) throw new Error("Native event id is missing");
+
+    nativeDirectEventStats.lastCalendarId = safeString(graphCalendarId);
+    nativeDirectEventStats.lastEventId = id;
+    nativeDirectEventStats.lastTitle = safeString(data?.title);
+    nativeDirectEventStats.lastStart = safeString(data?.start);
+    nativeDirectEventStats.lastEnd = safeString(data?.end);
+    nativeDirectEventStats.lastAppointment = Boolean(data?.isAppointment);
+    nativeDirectEventStats.lastOnlineMeeting = Boolean(data?.isOnlineMeeting);
+    nativeDirectEventStats.lastStored = false;
+    nativeDirectEventStats.lastSyntheticSelf = false;
+    nativeDirectEventStats.lastError = "";
+
+    try {
+      const existing = await offlineStorage.getItem(id);
+      const newItem = plainToItem(data, raw);
+      // V2.27: a single external Graph write must not be wrapped in a batch.
+      // For one item, individual storage observer notifications are desirable so
+      // the active Thunderbird view can update immediately. Full snapshot
+      // reconciliation still uses batching.
+      if (existing) {
+        try { newItem.generation = existing.generation; } catch (_) {}
+        await offlineStorage.modifyItem(newItem, existing);
+      } else {
+        await offlineStorage.adoptItem(newItem);
+      }
+
+      // Verify the exact row immediately. This converts a silent cache/UI issue
+      // into a useful diagnostic instead of reporting a successful native push.
+      const stored = await offlineStorage.getItem(id);
+      if (!stored) throw new Error(`Thunderbird cache read-back failed for event ${id}`);
+      nativeDirectEventStats.lastStored = true;
+      nativeDirectEventStats.lastSyntheticSelf = safeString(stored?.getProperty?.("X-M365-SYNTHETIC-SELF")).toUpperCase() === "TRUE";
+      nativeDirectEventStats.upserts += 1;
+      nativeDirectEventStats.lastOperation = existing ? "modify" : "add";
+      scheduleCalendarViewReload("direct-event-upsert");
+      return {
+        ok: true,
+        graphCalendarId: safeString(graphCalendarId),
+        eventId: id,
+        operation: existing ? "modify" : "add",
+        stored: true,
+        appointment: Boolean(data?.isAppointment),
+        onlineMeeting: Boolean(data?.isOnlineMeeting),
+        start: dateTimeToIso(stored.startDate),
+        end: dateTimeToIso(stored.endDate)
+      };
+    } catch (error) {
+      nativeDirectEventStats.lastError = errorText(error);
+      nativeDirectEventStats.lastStored = false;
+      throw error;
+    }
+  }
+
+  async function upsertCalendarEvent(extension, graphCalendarId, data) {
+    return withCalendarSyncLock(graphCalendarId, () => upsertCalendarEventUnlocked(extension, graphCalendarId, data));
+  }
+
+  async function removeCalendarEventUnlocked(extension, graphCalendarId, eventId) {
+    resetTrace("removeCalendarEvent");
+    await stage("waitForCalendarStartup", () => waitForCalendarStartup());
+    ensureProviderRegistered(extension);
+    const calendar = stageSync(`findNativeCalendar:${graphCalendarId}`, () => findCalendarByGraphId(extension, graphCalendarId));
+    if (!calendar) throw new Error(`No registered Thunderbird calendar for Graph calendar ${graphCalendarId}`);
+    const raw = rawCalendar(calendar);
+    const offlineStorage = raw?.offlineStorage || calendar?.wrappedJSObject?.mCachedCalendar || null;
+    if (!offlineStorage) throw new Error(`Thunderbird offlineStorage is unavailable for ${calendar.name || graphCalendarId}`);
+    const id = safeString(eventId);
+    const existing = await offlineStorage.getItem(id);
+    if (existing) await offlineStorage.deleteItem(existing);
+    const remaining = await offlineStorage.getItem(id);
+    nativeDirectEventStats.removes += 1;
+    nativeDirectEventStats.lastCalendarId = safeString(graphCalendarId);
+    nativeDirectEventStats.lastEventId = id;
+    nativeDirectEventStats.lastOperation = "delete";
+    nativeDirectEventStats.lastStored = Boolean(remaining);
+    nativeDirectEventStats.lastError = remaining ? `Thunderbird cache still contains deleted event ${id}` : "";
+    scheduleCalendarViewReload("direct-event-delete");
+    return { ok: !remaining, graphCalendarId: safeString(graphCalendarId), eventId: id, removed: existing ? 1 : 0 };
+  }
+
+  async function removeCalendarEvent(extension, graphCalendarId, eventId) {
+    return withCalendarSyncLock(graphCalendarId, () => removeCalendarEventUnlocked(extension, graphCalendarId, eventId));
   }
 
   function findCalendarByGraphId(extension, graphCalendarId) {
@@ -1336,7 +1893,7 @@ function _m365NativeCreateProviderRuntime() {
     ) || null;
   }
 
-  async function replaceCalendarEvents(extension, graphCalendarId, events) {
+  async function replaceCalendarEventsUnlocked(extension, graphCalendarId, events) {
     resetTrace("replaceCalendarEvents");
     nativeSyncStats.lastStartedAt = new Date().toISOString();
     nativeSyncStats.lastFinishedAt = "";
@@ -1346,7 +1903,16 @@ function _m365NativeCreateProviderRuntime() {
     nativeSyncStats.cacheModifies = 0;
     nativeSyncStats.cacheDeletes = 0;
     nativeSyncStats.cacheUnchanged = 0;
+    nativeSyncStats.cacheMappingRepairs = 0;
+    nativeSyncStats.cacheVisibilityRepairs = 0;
     nativeSyncStats.cacheItems = 0;
+    nativeSyncStats.graphAppointments = (events || []).filter(event => Boolean(event?.isAppointment)).length;
+    nativeSyncStats.graphOnlineMeetings = (events || []).filter(event => Boolean(event?.isOnlineMeeting)).length;
+    nativeSyncStats.graphOtherMeetings = (events || []).filter(event => !event?.isAppointment && !event?.isOnlineMeeting).length;
+    nativeSyncStats.cacheAppointments = 0;
+    nativeSyncStats.cacheOnlineMeetings = 0;
+    nativeSyncStats.cacheOtherMeetings = 0;
+    nativeSyncStats.cacheSyntheticSelf = 0;
     nativeSyncStats.lastGraphCalendarId = safeString(graphCalendarId);
     nativeSyncStats.mode = "direct-cache-push";
     nativeSyncStats.message = "";
@@ -1368,27 +1934,28 @@ function _m365NativeCreateProviderRuntime() {
         throw new Error(`Thunderbird offlineStorage is unavailable for ${calendar.name || graphCalendarId}`);
       }
 
-      offlineStorage.startBatch();
-      let syncStats;
-      try {
-        syncStats = await stage(`reconcileNativeCache:${calendar.name || graphCalendarId}`, () =>
-          reconcileOfflineStorage(offlineStorage, events || [], raw)
-        );
-      } finally {
-        offlineStorage.endBatch();
-      }
+      const syncStats = await stage(`reconcileNativeCache:${calendar.name || graphCalendarId}`, () =>
+        reconcileOfflineStorage(offlineStorage, events || [], raw)
+      );
 
       nativeSyncStats.cacheAdds = Number(syncStats?.adds || 0);
       nativeSyncStats.cacheModifies = Number(syncStats?.modifies || 0);
       nativeSyncStats.cacheDeletes = Number(syncStats?.deletes || 0);
       nativeSyncStats.cacheUnchanged = Number(syncStats?.unchanged || 0);
+      nativeSyncStats.cacheMappingRepairs = Number(syncStats?.mappingRepairs || 0);
+      nativeSyncStats.cacheVisibilityRepairs = Number(syncStats?.visibilityRepairs || 0);
       nativeSyncStats.cacheWrites = nativeSyncStats.cacheAdds + nativeSyncStats.cacheModifies + nativeSyncStats.cacheDeletes;
       nativeSyncStats.cacheItems = await stage(
         `countNativeCache:${calendar.name || graphCalendarId}`,
         () => countOfflineEvents(offlineStorage)
       );
+      const cacheKinds = await classifyOfflineEvents(offlineStorage);
+      nativeSyncStats.cacheAppointments = cacheKinds.appointments;
+      nativeSyncStats.cacheOnlineMeetings = cacheKinds.onlineMeetings;
+      nativeSyncStats.cacheOtherMeetings = cacheKinds.otherMeetings;
+      nativeSyncStats.cacheSyntheticSelf = cacheKinds.syntheticSelf;
       nativeSyncStats.directPushes += 1;
-      nativeSyncStats.message = `+${nativeSyncStats.cacheAdds} ~${nativeSyncStats.cacheModifies} -${nativeSyncStats.cacheDeletes} =${nativeSyncStats.cacheUnchanged}; ${nativeSyncStats.cacheItems} cached occurrence(s)`;
+      nativeSyncStats.message = `+${nativeSyncStats.cacheAdds} ~${nativeSyncStats.cacheModifies} -${nativeSyncStats.cacheDeletes} =${nativeSyncStats.cacheUnchanged} repair=${nativeSyncStats.cacheMappingRepairs}; ${nativeSyncStats.cacheItems} cached item(s)`;
       nativeSyncStats.lastFinishedAt = new Date().toISOString();
 
       // The storage cache emits add notifications while filling. Emit a final
@@ -1407,6 +1974,7 @@ function _m365NativeCreateProviderRuntime() {
         cacheModifies: nativeSyncStats.cacheModifies,
         cacheDeletes: nativeSyncStats.cacheDeletes,
         cacheUnchanged: nativeSyncStats.cacheUnchanged,
+        cacheMappingRepairs: nativeSyncStats.cacheMappingRepairs,
         cacheItems: nativeSyncStats.cacheItems,
         message: nativeSyncStats.message,
         diagnostics: { ...nativeTrace, trace: [...nativeTrace.trace] }
@@ -1423,12 +1991,19 @@ function _m365NativeCreateProviderRuntime() {
         cacheModifies: nativeSyncStats.cacheModifies,
         cacheDeletes: nativeSyncStats.cacheDeletes,
         cacheUnchanged: nativeSyncStats.cacheUnchanged,
+        cacheMappingRepairs: nativeSyncStats.cacheMappingRepairs,
         cacheItems: nativeSyncStats.cacheItems,
         errorStage: nativeTrace.lastErrorStage || "replaceCalendarEvents",
         error: nativeTrace.lastError || nativeSyncStats.error,
         diagnostics: { ...nativeTrace, trace: [...nativeTrace.trace] }
       };
     }
+  }
+
+  async function replaceCalendarEvents(extension, graphCalendarId, events) {
+    return withCalendarSyncLock(graphCalendarId, () =>
+      replaceCalendarEventsUnlocked(extension, graphCalendarId, events)
+    );
   }
 
   function ensureProviderRegistered(extension) {
@@ -1438,6 +2013,22 @@ function _m365NativeCreateProviderRuntime() {
     catch (error) { nativeTeamsUiStats.lastError = errorText(error); }
     try { installNativeEventEditorDoubleClick(extension); }
     catch (error) { nativeEventEditorStats.lastError = errorText(error); }
+  }
+
+  async function activate(extension) {
+    resetTrace("activate");
+    await stage("waitForCalendarStartup", () => waitForCalendarStartup());
+    ensureProviderRegistered(extension);
+    const calendars = cal.manager.getCalendars()
+      .filter(item => isOwnCalendar(item, extension))
+      .map(calendarDescriptor);
+    trace("providerActivated", true, `${calendars.length} calendar(s)`);
+    return {
+      ok: true,
+      providerType: providerType(extension),
+      calendars,
+      diagnostics: { ...nativeTrace, trace: [...nativeTrace.trace] }
+    };
   }
 
   async function reloadViews(extension, reason = "manual") {
@@ -1493,17 +2084,16 @@ function _m365NativeCreateProviderRuntime() {
           // Follow Thunderbird's maintained Calendar Experiment ordering: name
           // and public properties are set before registerCalendar().
           stageSync(`configureCalendar:${label}`, () => {
-            calendar.name = descriptor.name || "Microsoft 365";
-            calendar.setProperty(PROP_GRAPH_ID, descriptor.graphCalendarId);
-            calendar.setProperty(PROP_ACCOUNT_ID, descriptor.accountId || "");
-            calendar.setProperty(PROP_ORGANIZER_ID, descriptor.organizerId || "");
-            calendar.setProperty(PROP_ORGANIZER_NAME, descriptor.organizerName || "");
-            calendar.setProperty("color", descriptor.color || "#4f6bed");
-            calendar.setProperty("disabled", descriptor.enabled === false);
-            calendar.setProperty("calendar-main-in-composite", descriptor.visible !== false);
-            calendar.setProperty("suppressAlarms", false);
-            calendar.setProperty("refreshInterval", 15);
-            calendar.setProperty("readOnly", Boolean(descriptor.readOnly));
+            withProgrammaticCalendarMutation(() => {
+              calendar.name = descriptor.name || "Microsoft 365";
+              calendar.setProperty(PROP_GRAPH_ID, descriptor.graphCalendarId);
+              calendar.setProperty(PROP_ACCOUNT_ID, descriptor.accountId || "");
+              calendar.setProperty(PROP_ORGANIZER_ID, descriptor.organizerId || "");
+              calendar.setProperty(PROP_ORGANIZER_NAME, descriptor.organizerName || "");
+              calendar.setProperty("refreshInterval", 15);
+              calendar.setProperty("readOnly", Boolean(descriptor.readOnly));
+            });
+            applySavedCalendarUserPrefs(extension, calendar, descriptor, true);
           });
 
           stageSync(`registerCalendar:${label}`, () => cal.manager.registerCalendar(calendar));
@@ -1514,17 +2104,16 @@ function _m365NativeCreateProviderRuntime() {
           }
         } else {
           stageSync(`updateCalendar:${label}`, () => {
-            calendar.name = descriptor.name || calendar.name;
-            calendar.setProperty(PROP_ACCOUNT_ID, descriptor.accountId || "");
-            calendar.setProperty(PROP_ORGANIZER_ID, descriptor.organizerId || "");
-            calendar.setProperty(PROP_ORGANIZER_NAME, descriptor.organizerName || "");
-            if (descriptor.color) calendar.setProperty("color", descriptor.color);
-            calendar.setProperty("readOnly", Boolean(descriptor.readOnly));
-            // IMPORTANT: do not overwrite "disabled" or
-            // "calendar-main-in-composite" for an already registered calendar.
-            // Those are Thunderbird/user UI state (Hide/Show, enable/disable),
-            // not Graph metadata. Earlier releases reset them on every ensureCalendars()
-            // call, which could immediately undo a Hide action.
+            withProgrammaticCalendarMutation(() => {
+              // Keep Thunderbird-owned display preferences (name, colour,
+              // enabled/visible, alarms and identity) untouched for an existing
+              // calendar. Only refresh Graph/provider metadata here.
+              calendar.setProperty(PROP_ACCOUNT_ID, descriptor.accountId || "");
+              calendar.setProperty(PROP_ORGANIZER_ID, descriptor.organizerId || "");
+              calendar.setProperty(PROP_ORGANIZER_NAME, descriptor.organizerName || "");
+              calendar.setProperty("readOnly", Boolean(descriptor.readOnly));
+            });
+            applySavedCalendarUserPrefs(extension, calendar, descriptor, false);
           });
         }
         result.push(calendarDescriptor(calendar));
@@ -1555,6 +2144,10 @@ function _m365NativeCreateProviderRuntime() {
 
   async function removeAll(extension) {
     await waitForCalendarStartup();
+    // Explicit removal (for example Logout) is the only place where calendar
+    // registry branches are intentionally deleted. Snapshot user preferences
+    // first so a later login can recreate calendars with the same UI choices.
+    try { snapshotAllCalendarUserPrefs(extension); } catch (_) {}
     for (const calendar of cal.manager.getCalendars().filter(item => isOwnCalendar(item, extension))) {
       cal.manager.unregisterCalendar(calendar);
     }
@@ -1588,6 +2181,324 @@ function _m365NativeCreateProviderRuntime() {
         diagnostics: { ...nativeTrace, trace: [...nativeTrace.trace] }
       };
     }
+  }
+
+  function nativeContactEmails(card) {
+    const values = [];
+    try { values.push(...toPlainArray(card?.emailAddresses)); } catch (_) {}
+    try { if (card?.primaryEmail) values.push(card.primaryEmail); } catch (_) {}
+    try {
+      const second = card?.getProperty?.("SecondEmail", "");
+      if (second) values.push(second);
+    } catch (_) {}
+    const seen = new Set();
+    return values
+      .map(value => safeString(value).trim())
+      .filter(value => value && value.includes("@"))
+      .filter(value => {
+        const key = value.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function nativeContactName(card, email) {
+    const direct = safeString(card?.displayName || card?.getProperty?.("DisplayName", "")).trim();
+    if (direct) return direct;
+    const first = safeString(card?.firstName || card?.getProperty?.("FirstName", "")).trim();
+    const last = safeString(card?.lastName || card?.getProperty?.("LastName", "")).trim();
+    return `${first} ${last}`.trim() || email;
+  }
+
+  const nativeAddressBookDiagnostics = {
+    backend: "not-run",
+    directoryCount: 0,
+    cardCount: 0,
+    lastQuery: "",
+    lastResultCount: 0,
+    autocompleteAddrbookCount: 0,
+    autocompleteLdapCount: 0,
+    asyncDirectoryCount: 0,
+    asyncDirectoryResultCount: 0,
+    asyncDirectoryTimeouts: 0,
+    enumerationCount: 0,
+    lastError: "",
+    directories: [],
+    asyncDirectories: []
+  };
+
+  function nativeAutocompleteResultItems(result, backend) {
+    const items = [];
+    const count = Number(result?.matchCount || 0);
+    let abResult = null;
+    try { abResult = result.QueryInterface(Ci.nsIAbAutoCompleteResult); } catch (_) {}
+    for (let i = 0; i < count; i += 1) {
+      let card = null;
+      let email = "";
+      try { card = abResult?.getCardAt(i) || null; } catch (_) {}
+      try { email = safeString(abResult?.getEmailToUse(i)).trim(); } catch (_) {}
+      if (!email) {
+        let value = "";
+        try { value = safeString(result.getFinalCompleteValueAt(i) || result.getValueAt(i)); } catch (_) {}
+        const angle = value.match(/<([^<>\s]+@[^<>\s]+)>/);
+        const plain = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        email = safeString(angle?.[1] || plain?.[0]).trim();
+      }
+      if (!email || !email.includes("@")) continue;
+      let name = nativeContactName(card, email);
+      if (!card) {
+        try {
+          const label = safeString(result.getLabelAt(i) || result.getValueAt(i)).trim();
+          name = label.replace(/\s*<[^>]+>\s*$/, "").trim() || email;
+        } catch (_) {}
+      }
+      items.push({
+        id: safeString(card?.UID || card?.uid || card?.localId || ""),
+        name,
+        email,
+        remote: backend === "ldap",
+        readOnly: backend === "ldap",
+        source: `thunderbird-autocomplete-${backend}`,
+        addressBook: ""
+      });
+    }
+    return items;
+  }
+
+  async function searchThunderbirdAutocomplete(backend, text) {
+    const contract = `@mozilla.org/autocomplete/search;1?name=${backend}`;
+    if (!Cc[contract]) return [];
+    let search = null;
+    try { search = Cc[contract].getService(Ci.nsIAutoCompleteSearch); }
+    catch (_) { return []; }
+    return new Promise(resolve => {
+      let done = false;
+      const collected = [];
+      const finish = () => {
+        if (done) return;
+        done = true;
+        try { nativeClearTimeout(timer); } catch (_) {}
+        resolve(collected);
+      };
+      const timer = nativeSetTimeout(finish, backend === "ldap" ? 5000 : 9000);
+      const listener = {
+        QueryInterface: ChromeUtils.generateQI(["nsIAutoCompleteObserver"]),
+        onSearchResult(_search, result) {
+          try { collected.push(...nativeAutocompleteResultItems(result, backend)); }
+          catch (error) { nativeAddressBookDiagnostics.lastError = errorText(error); }
+          const state = Number(result?.searchResult || 0);
+          // RESULT_*_ONGOING = 5/6. All other states are final.
+          if (state !== 5 && state !== 6) finish();
+        }
+      };
+      try { search.startSearch(text, JSON.stringify({ type: "addr_to" }), null, listener); }
+      catch (error) {
+        nativeAddressBookDiagnostics.lastError = errorText(error);
+        finish();
+      }
+    });
+  }
+
+  async function searchAsyncAddressBookDirectory(directory, text) {
+    const name = safeString(directory?.dirName || directory?.URI || "async-address-book");
+    return new Promise(resolve => {
+      let finished = false;
+      const cards = [];
+      const done = (timedOut = false, status = null, complete = null) => {
+        if (finished) return;
+        finished = true;
+        try { nativeClearTimeout(timer); } catch (_) {}
+        resolve({ name, cards, timedOut, status, complete });
+      };
+      const timer = nativeSetTimeout(() => done(true), 9000);
+      const listener = {
+        onSearchFoundCard(card) {
+          if (card && !card.isMailList) cards.push(card);
+        },
+        onSearchFinished(status, isCompleteResult) {
+          done(false, status, isCompleteResult);
+        }
+      };
+      try {
+        // Thunderbird's own AbAutoCompleteSearch uses this exact asynchronous
+        // path for ASYNC_DIRECTORY_TYPE address books (including CardDAV-like
+        // providers): dir.search(null, userText, listener). childCards is not a
+        // reliable way to query such remote directories.
+        directory.search(null, text, listener);
+      } catch (error) {
+        nativeAddressBookDiagnostics.lastError = `${name}: ${errorText(error)}`;
+        done(false, "exception", false);
+      }
+    });
+  }
+
+  function collectAddressBookInventory() {
+    const directories = [];
+    let cardCount = 0;
+    for (const directory of toPlainArray(MailServices?.ab?.directories)) {
+      const info = {
+        id: safeString(directory?.UID || ""),
+        name: safeString(directory?.dirName || ""),
+        uid: safeString(directory?.UID || ""),
+        remote: Boolean(directory?.isRemote),
+        readOnly: Boolean(directory?.readOnly),
+        childCardCount: 0,
+        cardCount: 0,
+        useForAutocomplete: null,
+        error: ""
+      };
+      try { info.childCardCount = Number(directory?.childCardCount || toPlainArray(directory?.childCards).length || 0); }
+      catch (error) { info.error = errorText(error); }
+      try { info.useForAutocomplete = Boolean(directory?.useForAutocomplete?.("")); } catch (_) {}
+      info.cardCount = info.childCardCount;
+      cardCount += info.childCardCount;
+      directories.push(info);
+    }
+    return { directories, cardCount };
+  }
+
+  async function listAddressBooks(_extension) {
+    if (!MailServices?.ab) return [];
+    return collectAddressBookInventory().directories.map(info => ({
+      id: safeString(info.id || info.uid),
+      uid: safeString(info.uid || info.id),
+      name: safeString(info.name),
+      remote: Boolean(info.remote),
+      readOnly: Boolean(info.readOnly),
+      useForAutocomplete: info.useForAutocomplete !== false,
+      cardCount: Number(info.cardCount || info.childCardCount || 0)
+    }));
+  }
+
+  async function searchAddressBook(_extension, query, addressBookIds = ["*"]) {
+    const text = safeString(query).trim();
+    const scope = Array.isArray(addressBookIds) ? addressBookIds.map(safeString).filter(Boolean) : ["*"];
+    const searchAllBooks = scope.includes("*");
+    const selected = new Set(searchAllBooks ? [] : scope);
+    nativeAddressBookDiagnostics.lastQuery = text;
+    nativeAddressBookDiagnostics.lastError = "";
+    nativeAddressBookDiagnostics.backend = "thunderbird-autocomplete+enumeration";
+    nativeAddressBookDiagnostics.lastResultCount = 0;
+    nativeAddressBookDiagnostics.autocompleteAddrbookCount = 0;
+    nativeAddressBookDiagnostics.autocompleteLdapCount = 0;
+    nativeAddressBookDiagnostics.asyncDirectoryCount = 0;
+    nativeAddressBookDiagnostics.asyncDirectoryResultCount = 0;
+    nativeAddressBookDiagnostics.asyncDirectoryTimeouts = 0;
+    nativeAddressBookDiagnostics.asyncDirectories = [];
+    nativeAddressBookDiagnostics.enumerationCount = 0;
+    if (text.length < 2 || !MailServices?.ab) return [];
+
+    const inventory = collectAddressBookInventory();
+    nativeAddressBookDiagnostics.directories = inventory.directories;
+    nativeAddressBookDiagnostics.directoryCount = inventory.directories.length;
+    nativeAddressBookDiagnostics.cardCount = inventory.cardCount;
+
+    const parts = text.toLowerCase().split(/\s+/).filter(Boolean);
+    const results = [];
+    const seen = new Set();
+    const add = item => {
+      const email = safeString(item?.email).trim();
+      if (!email || !email.includes("@")) return;
+      const searchable = `${item?.name || ""} ${email}`.toLowerCase();
+      if (!parts.every(part => searchable.includes(part))) return;
+      const key = email.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(item);
+    };
+
+    // V2.22: run Thunderbird's normal addrbook autocomplete, LDAP and the
+    // explicit async-directory path in parallel. CardDAV/extension-backed
+    // directories are asynchronous in Thunderbird and may need network time;
+    // the previous one-second local autocomplete timeout returned before those
+    // providers had a chance to report results.
+    let local = [];
+    let ldap = [];
+    let searched = [];
+    try {
+      const asyncType = Ci.nsIAbManager.ASYNC_DIRECTORY_TYPE;
+      const asyncDirectories = toPlainArray(MailServices.ab.directories)
+        .filter(directory => Number(directory?.dirType) === Number(asyncType))
+        .filter(directory => searchAllBooks || selected.has(safeString(directory?.UID || "")));
+      nativeAddressBookDiagnostics.asyncDirectoryCount = asyncDirectories.length;
+      const combined = await Promise.all([
+        (searchAllBooks ? searchThunderbirdAutocomplete("addrbook", text) : Promise.resolve([])).catch(error => {
+          nativeAddressBookDiagnostics.lastError = errorText(error);
+          return [];
+        }),
+        (searchAllBooks ? searchThunderbirdAutocomplete("ldap", text) : Promise.resolve([])).catch(error => {
+          if (!nativeAddressBookDiagnostics.lastError) nativeAddressBookDiagnostics.lastError = errorText(error);
+          return [];
+        }),
+        Promise.all(asyncDirectories.map(directory => searchAsyncAddressBookDirectory(directory, text))).catch(error => {
+          if (!nativeAddressBookDiagnostics.lastError) nativeAddressBookDiagnostics.lastError = errorText(error);
+          return [];
+        })
+      ]);
+      [local, ldap, searched] = combined;
+    } catch (error) {
+      nativeAddressBookDiagnostics.lastError = errorText(error);
+    }
+
+    nativeAddressBookDiagnostics.autocompleteAddrbookCount = local.length;
+    nativeAddressBookDiagnostics.autocompleteLdapCount = ldap.length;
+    local.forEach(add);
+    ldap.forEach(add);
+
+    for (const outcome of searched) {
+      nativeAddressBookDiagnostics.asyncDirectories.push({
+        name: outcome.name,
+        cardCount: outcome.cards.length,
+        timedOut: Boolean(outcome.timedOut),
+        status: safeString(outcome.status),
+        complete: outcome.complete == null ? null : Boolean(outcome.complete)
+      });
+      if (outcome.timedOut) nativeAddressBookDiagnostics.asyncDirectoryTimeouts += 1;
+      for (const card of outcome.cards) {
+        for (const email of nativeContactEmails(card)) {
+          nativeAddressBookDiagnostics.asyncDirectoryResultCount += 1;
+          add({
+            id: safeString(card?.UID || card?.uid || card?.localId || ""),
+            name: nativeContactName(card, email),
+            email,
+            remote: true,
+            readOnly: true,
+            source: "thunderbird-native-async-directory",
+            addressBook: outcome.name
+          });
+        }
+      }
+    }
+
+    // Direct enumeration remains an independent fallback and makes diagnosis
+    // possible even when the autocomplete component is unavailable.
+    let enumCount = 0;
+    for (const directory of toPlainArray(MailServices.ab.directories)) {
+      if (!searchAllBooks && !selected.has(safeString(directory?.UID || ""))) continue;
+      try {
+        for (const card of toPlainArray(directory?.childCards)) {
+          if (card?.isMailList) continue;
+          for (const email of nativeContactEmails(card)) {
+            enumCount += 1;
+            add({
+              id: safeString(card?.UID || card?.uid || card?.localId || ""),
+              name: nativeContactName(card, email),
+              email,
+              remote: Boolean(directory?.isRemote),
+              readOnly: Boolean(directory?.readOnly),
+              source: "thunderbird-native-enumeration",
+              addressBook: safeString(directory?.dirName || "")
+            });
+          }
+        }
+      } catch (error) {
+        if (!nativeAddressBookDiagnostics.lastError) nativeAddressBookDiagnostics.lastError = `${safeString(directory?.dirName)}: ${errorText(error)}`;
+      }
+    }
+    nativeAddressBookDiagnostics.enumerationCount = enumCount;
+    nativeAddressBookDiagnostics.lastResultCount = results.length;
+    return results.slice(0, 20);
   }
 
   async function status(extension) {
@@ -1624,9 +2535,32 @@ function _m365NativeCreateProviderRuntime() {
         lastError: nativeTrace.lastError,
         trace: [...nativeTrace.trace],
         syncStats: { ...nativeSyncStats },
+        directEventStats: { ...nativeDirectEventStats },
         viewReloadStats: { ...nativeViewReloadStats },
         teamsButtonStats: { ...nativeTeamsUiStats },
-        eventEditorStats: { ...nativeEventEditorStats }
+        eventEditorStats: { ...nativeEventEditorStats },
+        nativeUserPreferences: loadNativeUserPrefs(extension),
+        mailIdentityCount: allMailIdentities().length,
+        nativeAddressBookAvailable: Boolean(MailServices?.ab),
+        addressBookDiagnostics: { ...nativeAddressBookDiagnostics, directories: [...nativeAddressBookDiagnostics.directories] },
+        calendarDetails: cal.manager.getCalendars().filter(item => isOwnCalendar(item, extension)).map(calendar => {
+          const raw = rawCalendar(calendar);
+          let identity = null;
+          try { identity = calendar.getProperty("imip.identity"); } catch (_) {}
+          return {
+            id: safeString(calendar?.id),
+            name: safeString(calendar?.name),
+            type: safeString(calendar?.type),
+            rawType: safeString(raw?.type),
+            forceDisabled: Boolean(calendar?.getProperty?.("force-disabled")),
+            disabled: Boolean(calendar?.getProperty?.("disabled")),
+            visible: calendar?.getProperty?.("calendar-main-in-composite") !== false,
+            color: safeString(calendar?.getProperty?.("color")),
+            imipIdentityDisabled: calendar?.getProperty?.("imip.identity.disabled"),
+            identityKey: safeString(identity?.key || calendar?.getProperty?.("imip.identity.key")),
+            identityEmail: safeString(identity?.email || "")
+          };
+        })
       };
     } catch (error) {
       return {
@@ -1643,6 +2577,7 @@ function _m365NativeCreateProviderRuntime() {
         lastError: nativeTrace.lastError || errorText(error),
         trace: [...nativeTrace.trace],
         syncStats: { ...nativeSyncStats },
+        directEventStats: { ...nativeDirectEventStats },
         viewReloadStats: { ...nativeViewReloadStats },
         teamsButtonStats: { ...nativeTeamsUiStats },
         eventEditorStats: { ...nativeEventEditorStats }
@@ -1650,23 +2585,175 @@ function _m365NativeCreateProviderRuntime() {
     }
   }
 
-  async function shutdown(extension) {
+
+  function diagnosticItemIcs(item) {
+    try {
+      const component = item?.icalComponent;
+      if (component?.serializeToICS) return safeString(component.serializeToICS()).trim();
+    } catch (_) {}
+    return "";
+  }
+
+  function diagnosticRangeMatch(item, start, end) {
+    const rangeStart = Date.parse(safeString(start));
+    const rangeEnd = Date.parse(safeString(end));
+    if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd) || rangeEnd <= rangeStart) return true;
+    const itemStart = Date.parse(dateTimeToIso(item?.startDate));
+    const itemEnd = Date.parse(dateTimeToIso(item?.endDate));
+    if (!Number.isFinite(itemStart)) return true;
+    const effectiveEnd = Number.isFinite(itemEnd) ? itemEnd : itemStart + 1;
+    return effectiveEnd > rangeStart && itemStart < rangeEnd;
+  }
+
+  function diagnosticIsoToDateTime(value) {
+    const text = safeString(value);
+    if (!text) return null;
+    try {
+      const dt = cal.createDateTime();
+      dt.nativeTime = Date.parse(text) * 1000;
+      dt.timezone = cal.dtz.UTC;
+      return dt;
+    } catch (_) {
+      try { return cal.dtz.jsDateToDateTime(new Date(text), cal.dtz.UTC); } catch (_) {}
+    }
+    return null;
+  }
+
+  async function diagnosticStorageRangeQuery(offlineStorage, filter, start, end, calendar) {
+    const rangeStart = diagnosticIsoToDateTime(start);
+    const rangeEnd = diagnosticIsoToDateTime(end);
+    const result = [];
+    let error = "";
+    try {
+      const stream = offlineStorage.getItems(filter, 0, rangeStart, rangeEnd);
+      for await (const batch of cal.iterate.streamValues(stream)) {
+        for (const item of batch || []) result.push(diagnosticNativeItem(item, calendar));
+      }
+    } catch (e) {
+      error = errorText(e);
+    }
+    result.sort((a, b) => Date.parse(a.start || 0) - Date.parse(b.start || 0));
+    return { filter, count: result.length, error, items: result };
+  }
+
+  function diagnosticNativeItem(item, calendar) {
+    const plain = itemToPlain(item);
+    let recurrenceId = "";
+    let parentItemId = "";
+    let recurrenceInfo = false;
+    try { recurrenceId = dateTimeToIso(item?.recurrenceId); } catch (_) {}
+    try { parentItemId = safeString(item?.parentItem?.id); } catch (_) {}
+    try { recurrenceInfo = Boolean(item?.recurrenceInfo); } catch (_) {}
+    let generation = null;
+    try { generation = Number(item?.generation); } catch (_) {}
+    return {
+      ...plain,
+      nativeCalendarId: safeString(calendar?.id),
+      recurrenceId,
+      parentItemId,
+      hasRecurrenceInfo: recurrenceInfo,
+      generation: Number.isFinite(generation) ? generation : null,
+      mappingVersion: safeString(item?.getProperty?.("X-M365-NATIVE-MAP-VERSION")),
+      syntheticSelf: safeString(item?.getProperty?.("X-M365-SYNTHETIC-SELF")).toUpperCase() === "TRUE",
+      ical: diagnosticItemIcs(item)
+    };
+  }
+
+  async function exportDiagnostics(extension, graphCalendarId, start = "", end = "") {
+    await waitForCalendarStartup();
+    ensureProviderRegistered(extension);
+    const wanted = safeString(graphCalendarId);
+    const ownCalendars = cal.manager.getCalendars().filter(item => isOwnCalendar(item, extension));
+    const calendar = wanted
+      ? ownCalendars.find(item => safeString(item?.getProperty?.(PROP_GRAPH_ID) || rawCalendar(item)?.getProperty?.(PROP_GRAPH_ID)) === wanted)
+      : ownCalendars[0];
+    if (!calendar) throw new Error(`No registered Thunderbird calendar for Graph calendar ${wanted || "(unspecified)"}`);
+
+    const raw = rawCalendar(calendar);
+    const offlineStorage = raw?.offlineStorage || calendar?.wrappedJSObject?.mCachedCalendar || null;
+    if (!offlineStorage) throw new Error(`Thunderbird offlineStorage is unavailable for ${calendar?.name || wanted}`);
+
+    const storedItems = await listOfflineEvents(offlineStorage);
+    const selectedItems = storedItems.filter(item => diagnosticRangeMatch(item, start, end));
+    const items = selectedItems.map(item => diagnosticNativeItem(item, raw));
+    items.sort((a, b) => Date.parse(a.start || 0) - Date.parse(b.start || 0));
+
+    const eventBlocks = items.map(item => safeString(item.ical).trim()).filter(Boolean);
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.32//EN",
+      "CALSCALE:GREGORIAN",
+      `X-WR-CALNAME:${safeString(calendar?.name || "Microsoft 365").replace(/[\\;,\r\n]/g, " ")}`,
+      ...eventBlocks,
+      "END:VCALENDAR",
+      ""
+    ].join("\r\n");
+
+    const rangeQueries = {
+      eventParents: await diagnosticStorageRangeQuery(
+        offlineStorage,
+        Ci.calICalendar.ITEM_FILTER_TYPE_EVENT,
+        start, end, raw
+      ),
+      eventOccurrences: await diagnosticStorageRangeQuery(
+        offlineStorage,
+        Ci.calICalendar.ITEM_FILTER_TYPE_EVENT | Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES,
+        start, end, raw
+      ),
+      allOccurrences: await diagnosticStorageRangeQuery(
+        offlineStorage,
+        Ci.calICalendar.ITEM_FILTER_ALL_ITEMS | Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES,
+        start, end, raw
+      )
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      calendar: calendarDescriptor(calendar),
+      range: { start: safeString(start), end: safeString(end) },
+      totalStoredItems: storedItems.length,
+      exportedItems: items.length,
+      items,
+      rangeQueries,
+      ics
+    };
+  }
+
+  async function shutdown(extension, isAppShutdown = false) {
+    // V2.22 critical lifecycle fix:
+    // cal.manager.unregisterCalendar() deletes calendar.registry.<id> and all
+    // Thunderbird-owned UI preferences. Never call removeAll() on normal app
+    // shutdown. The process is exiting, so leaving provider/calendar objects in
+    // memory is correct and lets Thunderbird persist them normally.
+    try { snapshotAllCalendarUserPrefs(extension); } catch (_) {}
     removeVisibilityReloadObserver();
     removeTeamsMeetingButtons();
     removeNativeEventEditorDoubleClick();
-    try { await removeAll(extension); } catch (_) {}
-    try { M365CalendarProvider.unregister(extension); } catch (_) {}
+
+    if (!isAppShutdown) {
+      // Add-on disable/update: unregister only the dynamic provider temporarily.
+      // Thunderbird replaces its calendars by force-disabled dummy calendars but
+      // keeps registry/cache data; re-registering the provider swaps them back.
+      try { M365CalendarProvider.unregister(extension); } catch (_) {}
+    }
     return true;
   }
 
   return {
+    activate,
     ensureCalendars,
     removeAll,
     synchronize,
     replaceCalendarEvents,
+    upsertCalendarEvent,
+    removeCalendarEvent,
     reloadViews,
+    listAddressBooks,
+    searchAddressBook,
     status,
     diagnostics,
+    exportDiagnostics,
     shutdown,
   };
 }

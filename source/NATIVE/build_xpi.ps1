@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Out = Join-Path $Root "release"
-$Xpi = Join-Path $Out "M365_Thunderbird_Calendar_V2.19_NATIVE.xpi"
-$TempZip = Join-Path $Out "M365_Thunderbird_Calendar_V2.19_NATIVE.zip"
+$Xpi = Join-Path $Out "M365_Thunderbird_Calendar_V2.31_GITHUB_NATIVE.xpi"
+$TempZip = Join-Path $Out "M365_Thunderbird_Calendar_V2.31_GITHUB_NATIVE.zip"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 if (Test-Path $Xpi) { Remove-Item $Xpi -Force }
 if (Test-Path $TempZip) { Remove-Item $TempZip -Force }

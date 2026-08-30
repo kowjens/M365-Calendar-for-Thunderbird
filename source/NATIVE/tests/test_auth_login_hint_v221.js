@@ -1,0 +1,12 @@
+"use strict";
+const fs=require("fs"),path=require("path"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+assert.ok(bg.includes('authorize.searchParams.set("login_hint", hint)'),"Microsoft auth should reuse the signed-in account as login_hint");
+const start=bg.indexOf("async function login()");
+const end=bg.indexOf("\nasync function logout",start);
+const login=bg.slice(start,end);
+assert.ok(login.includes("silentReauthenticate()"),"manual Login should first recover existing Microsoft SSO silently");
+assert.ok(login.indexOf("silentReauthenticate()") < login.indexOf('prompt: "select_account"'),"silent recovery must precede account-selection popup");
+assert.ok(bg.includes("async function authDiagnostics()"),"non-secret auth diagnostics required");
+console.log("Microsoft silent login recovery V2.22: OK");

@@ -1,0 +1,11 @@
+"use strict";
+const fs = require("fs"), path = require("path"), assert = require("assert");
+const root = path.resolve(__dirname, "..");
+const api = fs.readFileSync(path.join(root, "experiments", "nativeCalendar", "api.js"), "utf8");
+assert.ok(api.includes('case "imip.identity.disabled"'), "calendar identity row must be enabled");
+assert.ok(api.includes('case "imip.identity"'), "provider must resolve Thunderbird mail identity");
+assert.ok(api.includes('case "imip.account"'), "provider must expose identity account");
+assert.ok(api.includes("identityForEmail(descriptor.organizerId)"), "calendar must auto-match signed-in M365 address to Thunderbird identity");
+assert.ok(api.includes('calendar.setProperty("imip.identity.key", identityKey)'), "selected identity key must be stored on calendar");
+assert.ok(api.includes("MailServices?.accounts?.allIdentities"), "identity resolution must use Thunderbird identities");
+console.log("native calendar mail identity V2.22: OK");

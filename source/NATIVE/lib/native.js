@@ -116,9 +116,16 @@
 
   function graphEventToNative(event) {
     const attendees = (event?.attendees || []).map(graphAttendeeToNative).filter(Boolean);
-    const organizer = graphOrganizerToNative(event?.organizer);
     const joinUrl = cleanString(event?.onlineMeeting?.joinUrl || event?.onlineMeetingUrl);
     const webLink = cleanString(event?.webLink);
+    const isOnlineMeeting = Boolean(event?.isOnlineMeeting || joinUrl);
+    // V2.27: a personal Microsoft 365 appointment is still owned by the
+    // signed-in user. Keep the Graph organizer in the neutral mapping. The
+    // privileged Thunderbird mirror may add a synthetic accepted self-attendee
+    // purely for rendering, but that synthetic attendee is stripped again when
+    // an appointment is written back to Graph.
+    const isAppointment = attendees.length === 0 && !isOnlineMeeting;
+    const organizer = graphOrganizerToNative(event?.organizer);
     const showAs = cleanString(event?.showAs).toLowerCase();
     const sensitivity = cleanString(event?.sensitivity).toLowerCase();
     const response = cleanString(event?.responseStatus?.response);
@@ -142,9 +149,11 @@
         ? Math.max(0, Math.round(Number(event.reminderMinutesBeforeStart)))
         : undefined,
       isCancelled: Boolean(event?.isCancelled),
-      isOnlineMeeting: Boolean(event?.isOnlineMeeting || joinUrl),
+      isOnlineMeeting,
+      isAppointment,
       isOrganizer: Boolean(event?.isOrganizer),
-      responseStatus: response,
+      responseStatus: isAppointment ? "" : response,
+      nativeSelfMirror: isAppointment,
       graphType: cleanString(event?.type),
       seriesMasterId: cleanString(event?.seriesMasterId),
       changeKey: cleanString(event?.changeKey),
@@ -198,7 +207,20 @@
   function responseChangeForUser(newItem, oldItem, userAddress) {
     const me = cleanAddress(userAddress);
     if (!me) return "";
-    const findStatus = item => cleanString((item?.attendees || []).find(a => cleanAddress(a?.address) === me)?.status).toUpperCase();
+    const normalizePartstat = value => {
+      const raw = cleanString(value);
+      const upper = raw.toUpperCase();
+      if (["ACCEPTED", "TENTATIVE", "DECLINED", "NEEDS-ACTION"].includes(upper)) return upper;
+      return graphResponseToPartstat(raw);
+    };
+    const findStatus = item => {
+      const own = (item?.attendees || []).find(a => cleanAddress(a?.address) === me)?.status;
+      if (own) return normalizePartstat(own);
+      // Thunderbird normally changes the user's attendee PARTSTAT. Keep the
+      // Graph response marker as a fallback for host versions that update the
+      // event-level response state instead.
+      return item?.responseStatus ? normalizePartstat(item.responseStatus) : "";
+    };
     const before = findStatus(oldItem);
     const after = findStatus(newItem);
     if (!after || after === before) return "";

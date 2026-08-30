@@ -1028,5 +1028,110 @@
   },
   "eventNotFound": {
     "message": "The Microsoft 365 event could not be loaded."
+  },
+  "contactTestTitle": {
+    "message": "Address book test"
+  },
+  "contactTestHelp": {
+    "message": "Runs exactly the same search as the attendee field and shows which Thunderbird backend path was used."
+  },
+  "contactTestPlaceholder": {
+    "message": "Name or email"
+  },
+  "contactTestButton": {
+    "message": "Search"
+  },
+  "contactTestNeedQuery": {
+    "message": "Please enter at least two characters."
+  },
+  "contactTestRunning": {
+    "message": "Testing address books …"
+  },
+  "contactTestResults": {
+    "message": "Results"
+  },
+  "contactTestFailed": {
+    "message": "Address book test failed"
+  },
+  "timeZoneHelp": {
+    "message": "Exchange/Graph time zone used by the M365 editor and availability queries. Native Thunderbird synchronization transports times internally in UTC to avoid double DST/time-zone conversion."
+  },
+  "timeZoneCustom": {
+    "message": "existing custom setting"
+  },
+  "contactAddressBooksTitle": {
+    "message": "Address books for attendee suggestions"
+  },
+  "contactAddressBooksHelp": {
+    "message": "Multiple selection is supported. Only selected books are searched for live suggestions."
+  },
+  "contactAddressBooksAll": {
+    "message": "Select all"
+  },
+  "contactAddressBooksRecommended": {
+    "message": "Autocomplete books"
+  },
+  "contactAddressBooksNone": {
+    "message": "None"
+  },
+  "contactAddressBooksStatus": {
+    "message": "$1 of $2 address books selected."
+  },
+  "contactAddressBookRemote": {
+    "message": "remote"
+  },
+  "contactAddressBookLocal": {
+    "message": "local"
+  },
+  "contactAddressBookNotAutocomplete": {
+    "message": "not marked for autocomplete"
+  },
+  "viewMonth": {
+    "message": "Month"
+  },
+  "viewWeek": {
+    "message": "Week"
+  },
+  "viewDay": {
+    "message": "Day"
+  },
+  "viewAgenda": {
+    "message": "Agenda"
+  },
+  "noEventsDay": {
+    "message": "No events"
+  },
+  "noEventsPeriod": {
+    "message": "No events in this period"
+  },
+  "diagnosticExportTitle": {
+    "message": "Calendar diagnostic export"
+  },
+  "diagnosticExportHelp": {
+    "message": "Exports Graph/Space, the Thunderbird native cache, ICS, sync state and an automatic event comparison as one ZIP. The export does not start a native synchronization."
+  },
+  "diagnosticExportFrom": {
+    "message": "From"
+  },
+  "diagnosticExportTo": {
+    "message": "Through"
+  },
+  "diagnosticExportButton": {
+    "message": "Create diagnostic ZIP"
+  },
+  "diagnosticExportPrivacy": {
+    "message": "Note: the ZIP contains calendar content and attendee addresses, but no OAuth access or refresh tokens."
+  },
+  "diagnosticExportDateError": {
+    "message": "Please select a valid diagnostic date range."
+  },
+  "diagnosticExportRunning": {
+    "message": "Collecting diagnostic data …"
+  },
+  "diagnosticExportDone": {
+    "message": "Export ready: $1 Graph / $2 native / $3 missing native."
+  },
+  "diagnosticExportFailed": {
+    "message": "Diagnostic export failed: $1"
   }
 }

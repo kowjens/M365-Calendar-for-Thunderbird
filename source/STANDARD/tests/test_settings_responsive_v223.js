@@ -1,0 +1,10 @@
+"use strict";
+const fs=require("fs"), path=require("path"), assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const css=fs.readFileSync(path.join(root,"calendar","calendar.css"),"utf8");
+assert.ok(css.includes('max-width: calc(100vw - 24px)'), 'dialog viewport max-width missing');
+assert.ok(css.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'), 'shrinkable settings grid missing');
+assert.ok(css.includes('.form-grid > *, .form-grid label { min-width: 0; }'), 'grid child min-width reset missing');
+assert.ok(css.includes('width: 100%; min-width: 0; max-width: 100%'), 'control width constraints missing');
+assert.ok(css.includes('@media (max-width: 720px)') && css.includes('.form-grid { grid-template-columns: 1fr; }'), '720px single-column form missing');
+console.log('V2.23 responsive settings contract passed');

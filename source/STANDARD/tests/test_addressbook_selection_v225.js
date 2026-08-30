@@ -1,0 +1,11 @@
+"use strict";
+const fs=require("fs"),path=require("path"),vm=require("vm"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
+const start=bg.indexOf('function decodeVCardValue');
+const end=bg.indexOf('\nfunction cleanAttendees',start);
+assert.ok(start>=0&&end>start);
+const calls=[];
+const sandbox={console,browser:{permissions:{contains:async()=>true},contacts:{quickSearch:async(parentId)=>{calls.push(parentId);return parentId==='book-b'?[{id:'2',parentId:'book-b',properties:{DisplayName:'Volker Dudek',PrimaryEmail:'volker.dudek@3-5pe.com'}}]:[];}},addressBooks:{list:async()=>[]}},getConfig:async()=>({contactAddressBookIds:['book-b']}),probeNativeApi:async()=>null,nativeApiIfLoaded:()=>null};
+vm.createContext(sandbox);vm.runInContext(bg.slice(start,end)+'\nthis.searchContacts=searchContacts;',sandbox);
+(async()=>{const r=await sandbox.searchContacts('volker');assert.deepStrictEqual(calls,['book-b']);assert.strictEqual(r.length,1);assert.strictEqual(r[0].email,'volker.dudek@3-5pe.com');console.log('V2.27 selected address-book search passed');})().catch(e=>{console.error(e);process.exit(1);});

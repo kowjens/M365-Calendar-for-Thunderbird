@@ -1,0 +1,11 @@
+"use strict";
+const fs=require("fs"), path=require("path"), assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments","nativeCalendar","api.js"),"utf8");
+const start=api.indexOf('async function listOfflineEvents');
+const end=api.indexOf('function cachedChangeKey', start);
+const block=api.slice(start,end);
+assert.ok(block.includes('ITEM_FILTER_TYPE_EVENT'), 'event filter missing');
+assert.ok(!block.includes('ITEM_FILTER_CLASS_OCCURRENCES'), 'reconciliation must query parent rows only');
+assert.ok(api.includes('async function replaceCalendarEventsUnlocked') && api.includes('async function replaceCalendarEvents(extension'), 'serialized direct-push wrapper missing');
+console.log('V2.23 parent cache row contract passed');

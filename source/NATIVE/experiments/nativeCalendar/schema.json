@@ -12,6 +12,15 @@
         }
       },
       {
+        "name": "activate",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
         "name": "ensureCalendars",
         "type": "function",
         "async": true,
@@ -68,6 +77,51 @@
         }
       },
       {
+        "name": "upsertCalendarEvent",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "graphCalendarId",
+            "type": "string"
+          },
+          {
+            "name": "event",
+            "type": "any"
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "removeCalendarEvent",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "graphCalendarId",
+            "type": "string"
+          },
+          {
+            "name": "eventId",
+            "type": "string"
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "listAddressBooks",
+        "type": "function",
+        "async": true,
+        "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
         "name": "reloadViews",
         "type": "function",
         "async": true,
@@ -83,10 +137,56 @@
         }
       },
       {
+        "name": "searchAddressBook",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "query",
+            "type": "string"
+          },
+          {
+            "name": "addressBookIds",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "optional": true
+          }
+        ],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
         "name": "status",
         "type": "function",
         "async": true,
         "parameters": [],
+        "returns": {
+          "type": "any"
+        }
+      },
+      {
+        "name": "exportDiagnostics",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "graphCalendarId",
+            "type": "string"
+          },
+          {
+            "name": "start",
+            "type": "string",
+            "optional": true
+          },
+          {
+            "name": "end",
+            "type": "string",
+            "optional": true
+          }
+        ],
         "returns": {
           "type": "any"
         }

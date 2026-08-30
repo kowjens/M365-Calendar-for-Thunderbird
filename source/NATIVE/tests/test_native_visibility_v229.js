@@ -1,0 +1,14 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const api = fs.readFileSync(path.resolve(__dirname,"../experiments/nativeCalendar/api.js"),"utf8");
+assert.ok(api.includes('const NATIVE_MAPPING_VERSION = "2.32-full-cache-readopt"'));
+assert.ok(api.includes('stats.visibilityRepairs += 1'));
+assert.ok(api.includes('await offlineStorage.deleteItem(oldItem)'));
+assert.ok(api.includes('await offlineStorage.adoptItem(newItem)'));
+assert.ok(api.includes('if (mappingRepair) {'));
+assert.ok(!api.includes('this.offlineStorage.startBatch();\n      try {\n        const results = await this.extension.emit("nativeCalendar.onSync"'));
+const cal = fs.readFileSync(path.resolve(__dirname,"../calendar/calendar.js"),"utf8");
+assert.ok(cal.includes("syncCacheVisibilityRepairs="));
+console.log("V2.29 non-online native visibility repair contract OK");

@@ -1,0 +1,15 @@
+"use strict";
+const fs = require("fs"), path = require("path"), assert = require("assert");
+const root = path.resolve(__dirname, "..");
+const bg = fs.readFileSync(path.join(root, "background.js"), "utf8");
+const api = fs.readFileSync(path.join(root, "experiments", "nativeCalendar", "api.js"), "utf8");
+const schema = JSON.parse(fs.readFileSync(path.join(root, "experiments", "nativeCalendar", "schema.json"), "utf8"));
+assert.ok(api.includes('resource:///modules/MailServices.sys.mjs'), "native runtime must import MailServices");
+assert.ok(api.includes("MailServices.ab.directories"), "native search must enumerate Thunderbird address books");
+assert.ok(api.includes("directory?.childCards"), "native search must enumerate cards");
+assert.ok(api.includes("card?.emailAddresses"), "native search must use Thunderbird card email addresses");
+assert.ok(api.includes("async function searchAddressBook"), "native address-book search must exist");
+assert.ok(schema[0].functions.some(f => f.name === "searchAddressBook"), "Experiment schema must expose searchAddressBook");
+assert.ok(bg.includes("nativeApi?.searchAddressBook"), "background contact search must use native fallback");
+assert.ok(bg.includes("browser.contacts.quickSearch(undefined, queryInfo)"), "WebExtension contact API fallback must remain available");
+console.log("native address-book fallback V2.22: OK");

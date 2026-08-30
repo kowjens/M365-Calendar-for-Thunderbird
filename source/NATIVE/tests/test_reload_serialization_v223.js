@@ -1,0 +1,11 @@
+"use strict";
+const fs=require("fs"), path=require("path"), assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments","nativeCalendar","api.js"),"utf8");
+assert.ok(api.includes('const nativeCalendarSyncLocks = new Map();'), 'per-calendar sync queue missing');
+assert.ok(api.includes('withCalendarSyncLock(graphCalendarId'), 'serialized provider/direct sync missing');
+assert.ok(api.includes('scheduleCalendarViewReload("provider-replay")'), 'provider replay view rebuild missing');
+assert.ok(api.includes('resetLog() {') && api.includes('calCachedCalendar calls resetLog()'), 'safe resetLog missing');
+const block=api.match(/resetLog\(\) \{([\s\S]*?)\n    \}/);
+assert.ok(block && !block[1].includes('notify("onLoad"'), 'resetLog must not emit onLoad');
+console.log('V2.23 reload serialization contract passed');

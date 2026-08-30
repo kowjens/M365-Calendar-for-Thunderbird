@@ -1,0 +1,18 @@
+"use strict";
+const fs=require("fs"),path=require("path"),assert=require("assert");
+const root=path.resolve(__dirname,"..");
+const api=fs.readFileSync(path.join(root,"experiments/nativeCalendar/api.js"),"utf8");
+assert.ok(api.includes("shutdown(extension, Boolean(isAppShutdown))"),"Experiment shutdown must pass app-shutdown flag");
+const start=api.indexOf("async function shutdown(extension, isAppShutdown = false)");
+const end=api.indexOf("\n  return {",start);
+assert.ok(start>=0 && end>start,"native shutdown function missing");
+const body=api.slice(start,end);
+assert.ok(!body.includes("removeAll(extension)"),"shutdown must never explicitly unregister native calendars");
+assert.ok(!body.includes("unregisterCalendar(calendar)"),"shutdown must preserve calendar.registry.* preferences");
+assert.ok(body.includes("if (!isAppShutdown)"),"provider cleanup must distinguish app shutdown from disable/update");
+assert.ok(body.includes("M365CalendarProvider.unregister(extension)"),"disable/update should temporarily unregister only provider");
+assert.ok(api.includes("unregisterCalendarProvider(type, true)"),"provider unregister must be temporary and preserve registry/cache");
+const removeStart=api.indexOf("async function removeAll(extension)");
+const removeEnd=api.indexOf("\n  async function synchronize",removeStart);
+assert.ok(api.slice(removeStart,removeEnd).includes("unregisterCalendar(calendar)"),"explicit removeAll remains the deliberate calendar deletion path");
+console.log("native lifecycle persistence V2.22: OK");

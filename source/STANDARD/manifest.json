@@ -2,8 +2,8 @@
   "manifest_version": 2,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "2.0.19",
-  "author": "Jens Kowalsky",
+  "version": "2.0.32",
+  "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "default_locale": "de",
   "browser_specific_settings": {
     "gecko": {
@@ -12,12 +12,9 @@
     }
   },
   "icons": {
-    "16": "icons/jk-16.png",
-    "32": "icons/jk-32.png",
-    "48": "icons/jk-48.png",
-    "64": "icons/jk-64.png",
-    "96": "icons/jk-96.png",
-    "128": "icons/jk-128.png"
+    "16": "icons/m365-16.svg",
+    "32": "icons/m365-32.svg",
+    "64": "icons/m365-64.svg"
   },
   "permissions": [
     "storage",
@@ -41,8 +38,8 @@
     "default_label": "__MSG_inviteActionLabel__",
     "default_popup": "invite/invite.html",
     "default_icon": {
-      "16": "icons/jk-16.png",
-      "32": "icons/jk-32.png"
+      "16": "icons/m365-16.svg",
+      "32": "icons/m365-32.svg"
     }
   }
 }

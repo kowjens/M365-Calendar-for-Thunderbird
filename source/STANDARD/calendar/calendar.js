@@ -12,13 +12,15 @@ const state = {
   auth: null,
   calendars: [],
   events: [],
-  cursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  cursor: new Date(),
   selectedEventId: null,
   loading: false,
   sync: null,
   calendarSource: null,
   autoSyncTimer: null,
-  editingEventId: null
+  editingEventId: null,
+  addressBooks: [],
+  viewMode: "month"
 };
 
 const UI_LOCALE = browser.i18n.getUILanguage() || navigator.language || "de";
@@ -26,6 +28,77 @@ const monthFormatter = new Intl.DateTimeFormat(UI_LOCALE, { month: "long", year:
 const dayFormatter = new Intl.DateTimeFormat(UI_LOCALE, { weekday: "short", day: "2-digit", month: "2-digit" });
 const dateTimeFormatter = new Intl.DateTimeFormat(UI_LOCALE, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const timeFormatter = new Intl.DateTimeFormat(UI_LOCALE, { hour: "2-digit", minute: "2-digit" });
+
+const EXCHANGE_TIME_ZONES = [
+  ["UTC", "UTC"],
+  ["GMT Standard Time", "Europe/London — Dublin, Edinburgh, Lisbon, London"],
+  ["W. Europe Standard Time", "Europe/Berlin — Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna"],
+  ["Romance Standard Time", "Europe/Paris — Brussels, Copenhagen, Madrid, Paris"],
+  ["Central Europe Standard Time", "Europe/Budapest — Belgrade, Bratislava, Budapest, Ljubljana, Prague"],
+  ["Central European Standard Time", "Europe/Warsaw — Sarajevo, Skopje, Warsaw, Zagreb"],
+  ["E. Europe Standard Time", "Europe/Chisinau"],
+  ["FLE Standard Time", "Europe/Helsinki — Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius"],
+  ["GTB Standard Time", "Europe/Athens — Athens, Bucharest"],
+  ["Turkey Standard Time", "Europe/Istanbul"],
+  ["Russian Standard Time", "Europe/Moscow"],
+  ["Israel Standard Time", "Asia/Jerusalem"],
+  ["Arab Standard Time", "Asia/Riyadh — Kuwait, Riyadh"],
+  ["Arabian Standard Time", "Asia/Dubai — Abu Dhabi, Muscat"],
+  ["India Standard Time", "Asia/Kolkata — Chennai, Kolkata, Mumbai, New Delhi"],
+  ["Bangladesh Standard Time", "Asia/Dhaka"],
+  ["SE Asia Standard Time", "Asia/Bangkok — Bangkok, Hanoi, Jakarta"],
+  ["China Standard Time", "Asia/Shanghai — Beijing, Chongqing, Hong Kong, Urumqi"],
+  ["Singapore Standard Time", "Asia/Singapore — Kuala Lumpur, Singapore"],
+  ["Tokyo Standard Time", "Asia/Tokyo — Osaka, Sapporo, Tokyo"],
+  ["Korea Standard Time", "Asia/Seoul"],
+  ["AUS Eastern Standard Time", "Australia/Sydney — Canberra, Melbourne, Sydney"],
+  ["E. Australia Standard Time", "Australia/Brisbane"],
+  ["Tasmania Standard Time", "Australia/Hobart"],
+  ["New Zealand Standard Time", "Pacific/Auckland"],
+  ["Atlantic Standard Time", "America/Halifax"],
+  ["Eastern Standard Time", "America/New_York — Eastern Time (US & Canada)"],
+  ["Central Standard Time", "America/Chicago — Central Time (US & Canada)"],
+  ["Mountain Standard Time", "America/Denver — Mountain Time (US & Canada)"],
+  ["US Mountain Standard Time", "America/Phoenix — Arizona"],
+  ["Pacific Standard Time", "America/Los_Angeles — Pacific Time (US & Canada)"],
+  ["Alaskan Standard Time", "America/Anchorage — Alaska"],
+  ["Hawaiian Standard Time", "Pacific/Honolulu — Hawaii"],
+  ["SA Pacific Standard Time", "America/Bogota — Bogota, Lima, Quito"],
+  ["E. South America Standard Time", "America/Sao_Paulo — Brasilia"],
+  ["Argentina Standard Time", "America/Argentina/Buenos_Aires"],
+  ["Greenland Standard Time", "America/Nuuk"],
+  ["Azores Standard Time", "Atlantic/Azores"]
+];
+
+function populateTimeZoneSelect(value) {
+  if (!els.timeZoneInput) return;
+  const selected = String(value || "W. Europe Standard Time").trim() || "W. Europe Standard Time";
+  els.timeZoneInput.replaceChildren();
+  let found = false;
+  for (const [id, label] of EXCHANGE_TIME_ZONES) {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = `${id} · ${label}`;
+    option.selected = id === selected;
+    if (option.selected) found = true;
+    els.timeZoneInput.appendChild(option);
+  }
+  // Preserve a previously configured Graph/Exchange timezone even when it is
+  // not part of the curated list. This avoids silently changing existing setups.
+  if (!found && selected) {
+    const option = document.createElement("option");
+    option.value = selected;
+    option.textContent = `${selected} · ${t("timeZoneCustom")}`;
+    option.selected = true;
+    els.timeZoneInput.prepend(option);
+  }
+}
+
+function displayVersion(value) {
+  const raw = String(value || "2.0.32");
+  const match = raw.match(/^(\d+)\.0\.(\d+)$/);
+  return match ? `V${match[1]}.${Number(match[2])}` : `V${raw}`;
+}
 
 function t(key, substitutions) {
   return browser.i18n.getMessage(key, substitutions) || key;
@@ -54,7 +127,7 @@ function updateBuildModeBanner() {
   // states separate prevents a broken NATIVE provider from being mislabeled
   // as a STANDARD build.
   const packagedNative = Boolean(state.auth.nativeMode);
-  const version = state.auth.version || "2.0.19";
+  const version = displayVersion(state.auth.version || "2.0.32");
   els.buildModeBanner.className = `build-mode-banner ${packagedNative ? "native" : "standard"}`;
   if (packagedNative) {
     const apiLabel = state.auth.nativeCapable
@@ -76,6 +149,7 @@ async function api(action, extra = {}) {
   if (!result?.ok) {
     const error = new Error(result?.error || t("unknownAddonError"));
     error.status = Number(result?.status || 0);
+    error.authRequired = Boolean(result?.authRequired);
     throw error;
   }
   return result.data;
@@ -121,6 +195,26 @@ function chooseAttendeeSuggestion(index) {
   els.newAttendees.setSelectionRange(els.newAttendees.value.length, els.newAttendees.value.length);
 }
 
+function positionAttendeeSuggestions() {
+  if (!els.attendeeSuggestions || els.attendeeSuggestions.classList.contains("hidden") || !els.newAttendees) return;
+  const rect = els.newAttendees.getBoundingClientRect();
+  const gap = 4;
+  const availableBelow = Math.max(0, window.innerHeight - rect.bottom - 12);
+  const availableAbove = Math.max(0, rect.top - 12);
+  const maxHeight = Math.max(100, Math.min(260, Math.max(availableBelow, availableAbove)));
+  const placeAbove = availableBelow < 130 && availableAbove > availableBelow;
+  els.attendeeSuggestions.style.left = `${Math.max(8, rect.left)}px`;
+  els.attendeeSuggestions.style.width = `${Math.max(260, Math.min(rect.width, window.innerWidth - 16))}px`;
+  els.attendeeSuggestions.style.maxHeight = `${maxHeight}px`;
+  if (placeAbove) {
+    els.attendeeSuggestions.style.top = "auto";
+    els.attendeeSuggestions.style.bottom = `${Math.max(8, window.innerHeight - rect.top + gap)}px`;
+  } else {
+    els.attendeeSuggestions.style.bottom = "auto";
+    els.attendeeSuggestions.style.top = `${Math.min(window.innerHeight - 80, rect.bottom + gap)}px`;
+  }
+}
+
 function renderAttendeeSuggestions(items) {
   attendeeSuggestions = Array.isArray(items) ? items : [];
   attendeeSuggestionIndex = -1;
@@ -149,6 +243,7 @@ function renderAttendeeSuggestions(items) {
     els.attendeeSuggestions.appendChild(button);
   });
   els.attendeeSuggestions.classList.remove("hidden");
+  requestAnimationFrame(positionAttendeeSuggestions);
 }
 
 function updateAttendeeSuggestionSelection() {
@@ -163,7 +258,7 @@ function updateAttendeeSuggestionSelection() {
 function scheduleAttendeeSearch() {
   if (attendeeSearchTimer) clearTimeout(attendeeSearchTimer);
   const { token } = attendeeTokenInfo();
-  if (token.length < 2 || token.includes("@") && /\.[A-Za-z]{2,}$/.test(token)) {
+  if (token.length < 2) {
     hideAttendeeSuggestions();
     return;
   }
@@ -180,7 +275,7 @@ function scheduleAttendeeSearch() {
       hideAttendeeSuggestions({ clearStatus: false });
       setAttendeeSearchStatus(t("attendeeSearchUnavailable", error.message || String(error)), "error");
     }
-  }, 140);
+  }, 110);
 }
 
 function handleAttendeeSuggestionKeydown(event) {
@@ -286,6 +381,72 @@ function endOfGrid(monthDate) {
   return end;
 }
 
+function startOfDay(date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function startOfWeek(date) {
+  const value = startOfDay(date);
+  value.setDate(value.getDate() - ((value.getDay() + 6) % 7));
+  return value;
+}
+
+function visibleRange() {
+  const mode = state.viewMode || "month";
+  if (mode === "week") {
+    const start = startOfWeek(state.cursor);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    return { start, end };
+  }
+  if (mode === "day") {
+    const start = startOfDay(state.cursor);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    return { start, end };
+  }
+  if (mode === "agenda") {
+    const start = startOfDay(state.cursor);
+    const end = new Date(start); end.setDate(end.getDate() + 30);
+    return { start, end };
+  }
+  return { start: startOfGrid(state.cursor), end: endOfGrid(state.cursor) };
+}
+
+function shiftCursor(direction) {
+  const d = new Date(state.cursor);
+  if (state.viewMode === "week") d.setDate(d.getDate() + direction * 7);
+  else if (state.viewMode === "day") d.setDate(d.getDate() + direction);
+  else if (state.viewMode === "agenda") d.setDate(d.getDate() + direction * 30);
+  else d.setMonth(d.getMonth() + direction);
+  state.cursor = d;
+}
+
+function viewTitle() {
+  const mode = state.viewMode || "month";
+  if (mode === "day") return new Intl.DateTimeFormat(UI_LOCALE, { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(state.cursor);
+  if (mode === "week") {
+    const start = startOfWeek(state.cursor);
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    const short = new Intl.DateTimeFormat(UI_LOCALE, { day: "2-digit", month: "2-digit" });
+    return `${t("viewWeek")} · ${short.format(start)} – ${short.format(end)}`;
+  }
+  if (mode === "agenda") {
+    const { start, end } = visibleRange();
+    const last = new Date(end); last.setDate(last.getDate() - 1);
+    const short = new Intl.DateTimeFormat(UI_LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" });
+    return `${t("viewAgenda")} · ${short.format(start)} – ${short.format(last)}`;
+  }
+  return monthFormatter.format(state.cursor);
+}
+
+function updateViewSwitch() {
+  for (const button of document.querySelectorAll(".view-mode-btn")) {
+    button.classList.toggle("active", button.dataset.view === state.viewMode);
+    button.setAttribute("aria-pressed", button.dataset.view === state.viewMode ? "true" : "false");
+  }
+}
+
 function currentEvent() {
   return state.events.find(event => event.id === state.selectedEventId) || null;
 }
@@ -331,6 +492,7 @@ function createLink(label, url, className = "") {
 
 async function loadState() {
   state.config = await api("getConfig");
+  state.viewMode = ["month", "week", "day", "agenda"].includes(state.config?.spaceViewMode) ? state.config.spaceViewMode : "month";
   state.auth = await api("authStatus");
   updateHeader();
   updateBuildModeBanner();
@@ -385,7 +547,7 @@ async function loadCalendarsAndEvents() {
     showCalendar();
     await loadEvents();
   } catch (error) {
-    if (error.status === 401 || /anmeldung|sign[ -]?in|token|AADSTS/i.test(error.message)) {
+    if (error.status === 401 || error.authRequired) {
       state.auth = await api("authStatus");
       updateHeader();
       showWelcome();
@@ -449,8 +611,7 @@ async function loadEvents({ forceFull = false, quiet = false } = {}) {
   if (!state.config?.selectedCalendarId) return;
   setBusy(true);
   try {
-    const start = startOfGrid(state.cursor);
-    const end = endOfGrid(state.cursor);
+    const { start, end } = visibleRange();
     const result = await api("getEvents", {
       calendarId: state.config.selectedCalendarId,
       start: start.toISOString(),
@@ -471,9 +632,62 @@ async function loadEvents({ forceFull = false, quiet = false } = {}) {
 }
 
 function renderAll() {
-  els.monthTitle.textContent = monthFormatter.format(state.cursor);
-  renderMonthGrid();
+  els.monthTitle.textContent = viewTitle();
+  updateViewSwitch();
+  const isMonth = state.viewMode === "month";
+  const isAgenda = state.viewMode === "agenda";
+  els.monthViewContainer?.classList.toggle("hidden", !isMonth);
+  els.periodView?.classList.toggle("hidden", isMonth || isAgenda);
+  els.calendarPanel?.classList.toggle("hidden", isAgenda);
+  document.querySelector(".content-grid")?.classList.toggle("agenda-only", isAgenda);
+  if (isMonth) renderMonthGrid();
+  else if (!isAgenda) renderPeriodView();
   renderAgenda();
+}
+
+function eventsInRange(start, end) {
+  return state.events.filter(event => {
+    const value = eventStart(event);
+    return value && value >= start && value < end;
+  }).sort((a, b) => (eventStart(a)?.getTime() || 0) - (eventStart(b)?.getTime() || 0));
+}
+
+function renderPeriodView() {
+  if (!els.periodView) return;
+  els.periodView.replaceChildren();
+  const dayStarts = [];
+  if (state.viewMode === "week") {
+    const start = startOfWeek(state.cursor);
+    for (let i = 0; i < 7; i += 1) { const d = new Date(start); d.setDate(d.getDate() + i); dayStarts.push(d); }
+  } else {
+    dayStarts.push(startOfDay(state.cursor));
+  }
+  els.periodView.className = `period-view ${state.viewMode === "week" ? "week-view" : "day-view"}`;
+  for (const day of dayStarts) {
+    const end = new Date(day); end.setDate(end.getDate() + 1);
+    const column = document.createElement("section");
+    column.className = "period-day";
+    const heading = document.createElement("button");
+    heading.type = "button"; heading.className = "period-day-title";
+    heading.textContent = dayFormatter.format(day);
+    heading.addEventListener("click", async () => { state.cursor = new Date(day); state.viewMode = "day"; await api("saveConfig", { config: { spaceViewMode: "day" } }); await loadEvents(); });
+    column.appendChild(heading);
+    const events = eventsInRange(day, end);
+    if (!events.length) {
+      const empty = document.createElement("div"); empty.className = "period-empty"; empty.textContent = t("noEventsDay"); column.appendChild(empty);
+    } else {
+      for (const event of events) {
+        const card = document.createElement("button"); card.type = "button"; card.className = "period-event"; card.addEventListener("click", () => openEvent(event.id));
+        const time = document.createElement("span"); time.className = "period-event-time"; time.textContent = event.isAllDay ? t("allDay") : timeFormatter.format(eventStart(event));
+        const subject = document.createElement("strong"); subject.textContent = event.subject || t("noSubject");
+        const meta = document.createElement("small");
+        const bits = []; if (getJoinUrl(event)) bits.push("Teams"); if (event.location?.displayName) bits.push(event.location.displayName);
+        meta.textContent = bits.join(" · ");
+        card.append(time, subject, meta); column.appendChild(card);
+      }
+    }
+    els.periodView.appendChild(column);
+  }
 }
 
 function eventsByStartDate() {
@@ -537,18 +751,14 @@ function renderMonthGrid() {
 
 function renderAgenda() {
   els.agendaList.replaceChildren();
-  els.agendaTitle.textContent = monthFormatter.format(state.cursor);
-  const month = state.cursor.getMonth();
-  const year = state.cursor.getFullYear();
-  const events = state.events.filter(event => {
-    const start = eventStart(event);
-    return start && start.getMonth() === month && start.getFullYear() === year;
-  });
+  els.agendaTitle.textContent = viewTitle();
+  const { start: rangeStart, end: rangeEnd } = visibleRange();
+  const events = eventsInRange(rangeStart, rangeEnd);
 
   if (!events.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = t("noEventsMonth");
+    empty.textContent = state.viewMode === "month" ? t("noEventsMonth") : t("noEventsPeriod");
     els.agendaList.appendChild(empty);
     return;
   }
@@ -685,28 +895,33 @@ async function openSettings() {
   state.auth = await api("authStatus");
   els.clientIdInput.value = state.config.clientId || "";
   els.tenantInput.value = state.config.tenant || "";
-  els.timeZoneInput.value = state.config.timeZone || "";
+  populateTimeZoneSelect(state.config.timeZone || "W. Europe Standard Time");
   els.autoSyncMinutesInput.value = String(state.config.autoSyncMinutes ?? 5);
   els.nativeIntegrationCheck.checked = state.config.nativeIntegration !== false;
   els.nativeDaysBeforeInput.value = String(state.config.nativeDaysBefore ?? 90);
   els.nativeDaysAfterInput.value = String(state.config.nativeDaysAfter ?? 365);
   els.nativeIntegrationBox.classList.remove("hidden");
+  await populateAddressBookSelection();
   els.redirectUriInput.value = state.auth.redirectUri || "";
   els.loginStateText.textContent = state.auth.loggedIn
     ? (state.auth.profile?.userPrincipalName ? t("signedInAs", state.auth.profile.userPrincipalName) : t("signedIn"))
     : t("notSignedInMicrosoft");
+  els.logoutBtn.disabled = !state.auth.loggedIn;
+  els.fullSyncBtn.disabled = !state.auth.loggedIn || !state.config.selectedCalendarId;
+  await refreshCacheInfo();
+  // V2.24: probe/activate the native bridge before rendering the build-info
+  // label. V2.21 rendered state.auth.nativeCapable first and therefore showed
+  // "native API/provider not loaded" after restart even when the subsequent
+  // refresh successfully loaded and registered the provider.
+  await refreshNativeStatus();
   const distribution = state.auth.preconfigured
-    ? t("buildInfoInternal", state.auth.version || "2.0.16")
-    : t("buildInfoGithub", state.auth.version || "2.0.16");
+    ? t("buildInfoInternal", displayVersion(state.auth.version || "2.0.32"))
+    : t("buildInfoGithub", displayVersion(state.auth.version || "2.0.32"));
   const mode = state.auth.nativeMode ? t("nativeBuildTitle") : t("standardBuildTitle");
   const apiState = state.auth.nativeMode
     ? (state.auth.nativeCapable ? t("nativeApiLoaded") : t("nativeApiNotLoaded"))
     : "";
   els.buildInfo.textContent = `${distribution} · ${mode}${apiState ? ` · ${apiState}` : ""}`;
-  els.logoutBtn.disabled = !state.auth.loggedIn;
-  els.fullSyncBtn.disabled = !state.auth.loggedIn || !state.config.selectedCalendarId;
-  await refreshCacheInfo();
-  await refreshNativeStatus();
   els.settingsDialog.showModal();
 }
 
@@ -721,7 +936,8 @@ async function saveSettings() {
       autoSyncMinutes: els.autoSyncMinutesInput.value,
       nativeIntegration: els.nativeIntegrationCheck.checked,
       nativeDaysBefore: els.nativeDaysBeforeInput.value,
-      nativeDaysAfter: els.nativeDaysAfterInput.value
+      nativeDaysAfter: els.nativeDaysAfterInput.value,
+      contactAddressBookIds: selectedAddressBookIdsFromUi()
     }
   });
   state.config = config;
@@ -732,8 +948,10 @@ async function saveSettings() {
     toast(t("configChangedRelogin"));
   } else {
     if (state.auth?.nativeMode) {
-      if (state.auth?.loggedIn) {
-        try { await api("ensureNativeCalendars", { synchronize: true }); } catch (error) { console.warn(error); }
+      if (state.auth?.loggedIn && config.nativeIntegration) {
+        // V2.16: use the proven direct-cache-push path immediately when the
+        // user enables/saves native integration.
+        try { await api("syncNativeCalendars"); } catch (error) { console.warn(error); }
       } else {
         try { await api("ensureNativeCalendars", { synchronize: false }); } catch (_) {}
       }
@@ -751,6 +969,184 @@ async function refreshCacheInfo() {
     els.cacheInfo.textContent = t("cacheStats", [String(stats.windows || 0), String(stats.events || 0), when]);
   } catch (_) {
     els.cacheInfo.textContent = t("cacheStatsUnavailable");
+  }
+}
+
+function renderNativeDiagnostics(status) {
+  if (!els.nativeDebugText) return;
+  const diag = status?.diagnostics || {};
+  const auto = status?.autoEnsure || {};
+  const lines = [
+    `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.32"}`,
+    `experiment=${status?.available ? "loaded" : "not-loaded"}`,
+    `providerRuntime=${diag.providerModuleLoaded ? "loaded" : "not-loaded"}`,
+    `providerType=${diag.providerType || "-"}`,
+    `calendarStartup=${diag.calendarStartupReady ? "ready" : "not-ready"}`,
+    `managerProvider=${diag.managerProviderRegistered ? "registered" : "not-registered"}`,
+    `uiProvider=${diag.uiProviderRegistered ? "registered" : "not-registered"}`,
+    `tbCalendars=${Number(diag.registeredCalendarCount || 0)}`,
+    `autoEnsure=${auto.attempted ? (auto.ok ? "ok" : "failed") : "not-run"}`,
+    `graphCalendars=${Number(auto.graphCalendarCount || 0)}`,
+    `registered=${Number(auto.registeredCount || 0)}`,
+    `authLoggedIn=${status?.loggedIn ? "yes" : "no"}`,
+    `authNeedsInteraction=${status?.authDiagnostics?.requiresInteraction ? "yes" : "no"}`,
+    `authHasAccessToken=${status?.authDiagnostics?.hasAccessToken ? "yes" : "no"}`,
+    `authHasRefreshToken=${status?.authDiagnostics?.hasRefreshToken ? "yes" : "no"}`,
+    `exchangeTimeZone=${state.config?.timeZone || "W. Europe Standard Time"}`,
+    `nativeTimeTransport=UTC`,
+  ];
+  if (status?.authDiagnostics?.expiresInSeconds != null) lines.push(`authExpiresIn=${status.authDiagnostics.expiresInSeconds}s`);
+  if (status?.authDiagnostics?.lastAuthError) lines.push(`authLastError=${status.authDiagnostics.lastAuthError}`);
+  if (status?.authDiagnostics?.lastSilentAuthError) lines.push(`authSilentError=${status.authDiagnostics.lastSilentAuthError}`);
+  if (diag.mailIdentityCount != null) lines.push(`mailIdentities=${Number(diag.mailIdentityCount || 0)}`);
+  if (diag.addressBookDiagnostics) {
+    const ab = diag.addressBookDiagnostics;
+    lines.push(`addressBookBackend=${ab.backend || "-"}`);
+    lines.push(`addressBookDirectories=${Number(ab.directoryCount || 0)}`);
+    lines.push(`addressBookCards=${Number(ab.cardCount || 0)}`);
+    lines.push(`addressBookLastQuery=${ab.lastQuery || "-"}`);
+    lines.push(`addressBookLastResults=${Number(ab.lastResultCount || 0)}`);
+    if (ab.autocompleteAddrbookCount != null) lines.push(`addressBookAutocomplete=${Number(ab.autocompleteAddrbookCount || 0)}`);
+    if (ab.asyncDirectoryCount != null) lines.push(`addressBookAsyncDirectories=${Number(ab.asyncDirectoryCount || 0)}`);
+    if (ab.asyncDirectoryResultCount != null) lines.push(`addressBookAsyncResults=${Number(ab.asyncDirectoryResultCount || 0)}`);
+    if (ab.asyncDirectoryTimeouts != null) lines.push(`addressBookAsyncTimeouts=${Number(ab.asyncDirectoryTimeouts || 0)}`);
+    for (const dir of ab.asyncDirectories || []) {
+      lines.push(`addressBookAsync[${dir.name || "?"}]=${Number(dir.cardCount || 0)}${dir.timedOut ? ",timeout" : ""}`);
+    }
+    if (ab.lastError) lines.push(`addressBookError=${ab.lastError}`);
+  }
+  for (const cal of diag.calendarDetails || []) {
+    lines.push(`calendar[${cal.name || cal.id || "?"}].type=${cal.type || "-"}`);
+    lines.push(`calendar[${cal.name || cal.id || "?"}].forceDisabled=${cal.forceDisabled ? "yes" : "no"}`);
+    lines.push(`calendar[${cal.name || cal.id || "?"}].identityDisabled=${String(cal.imipIdentityDisabled)}`);
+    lines.push(`calendar[${cal.name || cal.id || "?"}].identity=${cal.identityEmail || cal.identityKey || "-"}`);
+  }
+  const providerStartup = status?.providerStartup || {};
+  if (providerStartup.lastReason) lines.push(`providerStartupReason=${providerStartup.lastReason}`);
+  lines.push(`providerStartupAttempted=${providerStartup.attempted ? "yes" : "no"}`);
+  lines.push(`providerStartupActivated=${providerStartup.activated ? "yes" : "no"}`);
+  if (providerStartup.lastError) lines.push(`providerStartupError=${providerStartup.lastError}`);
+  const autoSync = status?.autoSync || {};
+  lines.push(`autoSyncRunning=${autoSync.running ? "yes" : "no"}`);
+  if (autoSync.timer) lines.push(`autoSyncScheduled=yes`);
+  if (autoSync.scheduledAt) lines.push(`autoSyncScheduledAt=${autoSync.scheduledAt}`);
+  if (autoSync.lastReason) lines.push(`autoSyncReason=${autoSync.lastReason}`);
+  if (autoSync.lastStartedAt) lines.push(`autoSyncStarted=${autoSync.lastStartedAt}`);
+  if (autoSync.lastFinishedAt) lines.push(`autoSyncFinished=${autoSync.lastFinishedAt}`);
+  lines.push(`autoSyncCalendars=${Number(autoSync.lastSynchronized || 0)}`);
+  if (autoSync.lastError) lines.push(`autoSyncError=${autoSync.lastError}`);
+  if (diag.providerLoadError) lines.push(`providerLoadError=${diag.providerLoadError}`);
+  if (diag.providerRegistrationError) lines.push(`providerRegistrationError=${diag.providerRegistrationError}`);
+  if (auto.error) lines.push(`autoEnsureError=${auto.error}`);
+  const sync = diag.syncStats || {};
+  if (sync.lastStartedAt) lines.push(`syncStarted=${sync.lastStartedAt}`);
+  if (sync.lastFinishedAt) lines.push(`syncFinished=${sync.lastFinishedAt}`);
+  lines.push(`syncMode=${sync.mode || "-"}`);
+  lines.push(`syncGraphEvents=${Number(sync.graphEvents || 0)}`);
+  lines.push(`syncCacheWrites=${Number(sync.cacheWrites || 0)}`);
+  lines.push(`syncCacheAdds=${Number(sync.cacheAdds || 0)}`);
+  lines.push(`syncCacheModifies=${Number(sync.cacheModifies || 0)}`);
+  lines.push(`syncCacheDeletes=${Number(sync.cacheDeletes || 0)}`);
+  lines.push(`syncCacheUnchanged=${Number(sync.cacheUnchanged || 0)}`);
+  lines.push(`syncCacheItems=${Number(sync.cacheItems || 0)}`);
+  lines.push(`syncDirectPushes=${Number(sync.directPushes || 0)}`);
+  if (sync.lastGraphCalendarId) lines.push(`syncGraphCalendarId=${sync.lastGraphCalendarId}`);
+  if (sync.message) lines.push(`syncMessage=${sync.message}`);
+  if (sync.error) lines.push(`syncError=${sync.error}`);
+  const viewReload = diag.viewReloadStats || {};
+  lines.push(`viewReloadScheduled=${Number(viewReload.scheduled || 0)}`);
+  lines.push(`viewReloadExecuted=${Number(viewReload.executed || 0)}`);
+  lines.push(`viewReloadViews=${Number(viewReload.refreshedViews || 0)}`);
+  if (viewReload.lastReason) lines.push(`viewReloadReason=${viewReload.lastReason}`);
+  if (viewReload.lastError) lines.push(`viewReloadError=${viewReload.lastError}`);
+  const teamsUi = diag.teamsButtonStats || {};
+  lines.push(`teamsButtonWindows=${Number(teamsUi.injectedWindows || 0)}`);
+  lines.push(`teamsButtonClicks=${Number(teamsUi.clicks || 0)}`);
+  if (teamsUi.lastError) lines.push(`teamsButtonError=${teamsUi.lastError}`);
+  if (diag.lastOperation) lines.push(`lastOperation=${diag.lastOperation}`);
+  if (diag.lastErrorStage) lines.push(`lastErrorStage=${diag.lastErrorStage}`);
+  if (diag.lastError) lines.push(`lastError=${diag.lastError}`);
+  if (Array.isArray(diag.trace) && diag.trace.length) {
+    lines.push("trace:");
+    for (const entry of diag.trace) {
+      lines.push(`  ${entry.ok ? "OK" : "FAIL"} ${entry.stage}${entry.detail ? ` :: ${entry.detail}` : ""}`);
+    }
+  }
+  els.nativeDebugText.textContent = lines.join("\n");
+  if ((auto.attempted && !auto.ok) || diag.lastError) {
+    els.nativeDebugDetails.open = true;
+  }
+}
+
+async function populateAddressBookSelection() {
+  if (!els.contactAddressBooksSelect) return;
+  let books = [];
+  try { books = await api("listAddressBooks"); } catch (_) {}
+  state.addressBooks = Array.isArray(books) ? books : [];
+  const configured = Array.isArray(state.config?.contactAddressBookIds) ? state.config.contactAddressBookIds.map(String) : ["*"];
+  const allSelected = configured.includes("*");
+  const selected = new Set(configured);
+  els.contactAddressBooksSelect.replaceChildren();
+  for (const book of state.addressBooks) {
+    const option = document.createElement("option");
+    option.value = book.id;
+    const flags = [book.remote ? t("contactAddressBookRemote") : t("contactAddressBookLocal")];
+    if (book.useForAutocomplete === false) flags.push(t("contactAddressBookNotAutocomplete"));
+    if (Number.isFinite(Number(book.cardCount))) flags.push(String(book.cardCount));
+    option.textContent = `${book.name} — ${flags.join(" · ")}`;
+    option.selected = allSelected || selected.has(String(book.id));
+    els.contactAddressBooksSelect.appendChild(option);
+  }
+  updateAddressBookSelectionStatus();
+}
+
+function selectedAddressBookIdsFromUi() {
+  if (!els.contactAddressBooksSelect) return ["*"];
+  const options = [...els.contactAddressBooksSelect.options];
+  const selected = options.filter(option => option.selected).map(option => option.value);
+  if (options.length && selected.length === options.length) return ["*"];
+  return selected;
+}
+
+function updateAddressBookSelectionStatus() {
+  if (!els.contactAddressBooksStatus || !els.contactAddressBooksSelect) return;
+  const total = els.contactAddressBooksSelect.options.length;
+  const selected = [...els.contactAddressBooksSelect.options].filter(option => option.selected).length;
+  els.contactAddressBooksStatus.textContent = t("contactAddressBooksStatus", [String(selected), String(total)]);
+}
+
+function selectAddressBooks(mode) {
+  if (!els.contactAddressBooksSelect) return;
+  const byId = new Map((state.addressBooks || []).map(book => [String(book.id), book]));
+  for (const option of els.contactAddressBooksSelect.options) {
+    if (mode === "all") option.selected = true;
+    else if (mode === "none") option.selected = false;
+    else option.selected = byId.get(option.value)?.useForAutocomplete !== false;
+  }
+  updateAddressBookSelectionStatus();
+}
+
+async function testAddressBookSearch() {
+  if (!els.contactTestInput || !els.contactTestOutput) return;
+  const query = String(els.contactTestInput.value || "").trim();
+  if (query.length < 2) {
+    els.contactTestOutput.textContent = t("contactTestNeedQuery");
+    return;
+  }
+  els.contactTestOutput.textContent = t("contactTestRunning");
+  try {
+    const results = await api("searchContacts", { query, diagnostic: true });
+    const diagnostics = await api("contactDiagnostics");
+    const lines = [
+      `${t("contactTestResults")}: ${results.length}`,
+      ...results.map(item => `- ${item.name || item.email} <${item.email}> [${item.source || "webext"}]`),
+      "",
+      "Diagnostics:",
+      JSON.stringify(diagnostics, null, 2)
+    ];
+    els.contactTestOutput.textContent = lines.join("\n");
+  } catch (error) {
+    els.contactTestOutput.textContent = `${t("contactTestFailed")}: ${error.message || String(error)}`;
   }
 }
 
@@ -777,6 +1173,7 @@ async function refreshNativeStatus() {
     // V2.16 deliberately performs the first Experiment access only here,
     // after the normal STANDARD UI/background are already alive.
     const status = await api("nativeStatus");
+    renderNativeDiagnostics(status);
     state.auth.nativeCapable = Boolean(status.available);
     state.auth.nativeProbed = Boolean(status.probed);
     state.auth.nativeProbeError = status.bridgeError || "";
@@ -834,6 +1231,10 @@ async function refreshNativeStatus() {
     els.nativeDaysAfterInput.disabled = true;
     els.nativeSyncBtn.disabled = true;
     els.nativeStatusText.textContent = t("nativeBridgeFailed", error.message || String(error));
+    if (els.nativeDebugText) {
+      els.nativeDebugText.textContent = `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.32"}\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
+      if (els.nativeDebugDetails) els.nativeDebugDetails.open = true;
+    }
   }
 }
 
@@ -1187,6 +1588,11 @@ function bindEvents() {
   els.fullSyncBtn.addEventListener("click", forceFullSync);
   els.clearCacheBtn.addEventListener("click", clearOfflineCache);
   els.nativeSyncBtn.addEventListener("click", syncNativeNow);
+  if (els.contactTestBtn) els.contactTestBtn.addEventListener("click", testAddressBookSearch);
+  if (els.contactAddressBooksSelect) els.contactAddressBooksSelect.addEventListener("change", updateAddressBookSelectionStatus);
+  if (els.contactBooksAllBtn) els.contactBooksAllBtn.addEventListener("click", () => selectAddressBooks("all"));
+  if (els.contactBooksRecommendedBtn) els.contactBooksRecommendedBtn.addEventListener("click", () => selectAddressBooks("recommended"));
+  if (els.contactBooksNoneBtn) els.contactBooksNoneBtn.addEventListener("click", () => selectAddressBooks("none"));
 
   els.settingsForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -1201,19 +1607,17 @@ function bindEvents() {
     }
   });
 
-  els.prevBtn.addEventListener("click", async () => {
-    state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
+  els.prevBtn.addEventListener("click", async () => { shiftCursor(-1); await loadEvents(); });
+  els.nextBtn.addEventListener("click", async () => { shiftCursor(1); await loadEvents(); });
+  els.todayBtn.addEventListener("click", async () => { state.cursor = new Date(); await loadEvents(); });
+  document.querySelectorAll(".view-mode-btn").forEach(button => button.addEventListener("click", async () => {
+    const mode = button.dataset.view;
+    if (!["month", "week", "day", "agenda"].includes(mode) || mode === state.viewMode) return;
+    state.viewMode = mode;
+    state.config.spaceViewMode = mode;
+    await api("saveConfig", { config: { spaceViewMode: mode } });
     await loadEvents();
-  });
-  els.nextBtn.addEventListener("click", async () => {
-    state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
-    await loadEvents();
-  });
-  els.todayBtn.addEventListener("click", async () => {
-    const now = new Date();
-    state.cursor = new Date(now.getFullYear(), now.getMonth(), 1);
-    await loadEvents();
-  });
+  }));
   els.refreshBtn.addEventListener("click", () => loadEvents());
   els.calendarSelect.addEventListener("change", async () => {
     state.config.selectedCalendarId = els.calendarSelect.value;
@@ -1230,7 +1634,10 @@ function bindEvents() {
   els.deleteEventBtn.addEventListener("click", deleteCurrentEvent);
   els.checkAvailabilityBtn.addEventListener("click", checkAvailability);
   els.newAttendees.addEventListener("input", scheduleAttendeeSearch);
+  els.newAttendees.addEventListener("focus", () => { if (attendeeSuggestions.length) positionAttendeeSuggestions(); });
   els.newAttendees.addEventListener("keydown", handleAttendeeSuggestionKeydown);
+  window.addEventListener("resize", positionAttendeeSuggestions);
+  document.addEventListener("scroll", positionAttendeeSuggestions, true);
   els.newAttendees.addEventListener("blur", () => window.setTimeout(hideAttendeeSuggestions, 140));
   els.newRecurrenceType.addEventListener("change", updateRecurrenceVisibility);
   els.newRecurrenceEndType.addEventListener("change", updateRecurrenceVisibility);

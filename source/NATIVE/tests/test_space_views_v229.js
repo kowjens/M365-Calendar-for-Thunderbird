@@ -1,0 +1,15 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const root = path.resolve(__dirname, "..");
+const manifest = JSON.parse(fs.readFileSync(path.join(root,"manifest.json"),"utf8"));
+const html = fs.readFileSync(path.join(root,"calendar/calendar.html"),"utf8");
+const js = fs.readFileSync(path.join(root,"calendar/calendar.js"),"utf8");
+assert.strictEqual(manifest.version, "2.0.32");
+assert.strictEqual(manifest.author, "Jens Kowalsky, 3-5 Power Electronics GmbH");
+for (const view of ["month","week","day","agenda"]) assert.ok(html.includes(`data-view="${view}"`));
+assert.ok(js.includes('function displayVersion(value)'));
+assert.ok(js.includes('function renderPeriodView()'));
+assert.ok(js.includes('spaceViewMode'));
+console.log("V2.29 space-view/metadata contract OK");
