@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse, json, zipfile, hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
-INCLUDE = ["manifest.json", "background.js", "calendar", "invite", "lib", "config", "_locales", "icons"]
+INCLUDE = ["manifest.json", "background.js", "calendar", "invite", "confirm", "lib", "config", "_locales", "icons"]
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 
 

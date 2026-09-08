@@ -7,7 +7,7 @@ const start = bg.indexOf("async function nativeUpdateHandler");
 const end = bg.indexOf("async function nativeRemoveHandler", start);
 const fn = bg.slice(start, end);
 const responsePos = fn.indexOf("const responseAction = M365_NATIVE.responseChangeForUser");
-const organizerPos = fn.indexOf("const organizer = String(oldItem?.organizer?.address");
+const organizerPos = fn.indexOf("const organizer = M365_NATIVE.cleanAddress(oldItem?.organizer?.address");
 const patchPos = fn.indexOf('method: "PATCH"');
 assert.ok(responsePos >= 0 && organizerPos > responsePos, "RSVP must be detected before organizer classification");
 assert.ok(fn.includes("if (responseAction)"));

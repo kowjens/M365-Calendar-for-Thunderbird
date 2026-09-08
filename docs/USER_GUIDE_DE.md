@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.33
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -48,7 +48,7 @@ Bei einem Fehler:
 
 Der Block enthält z. B. `build`, `experiment`, `providerRuntime`, `tbCalendars`, `graphCalendars`, `syncCacheItems`, mögliche `syncError`-Zeilen und einen `trace`.
 
-### Diagnose-ZIP für fehlende native Termine (V2.33)
+### Diagnose-ZIP für fehlende native Termine (V2.34)
 
 Unter **Microsoft 365 → ⚙ Einstellungen → Native Thunderbird-Kalenderintegration** steht **Kalender-Diagnoseexport** zur Verfügung. Wähle einen Zeitraum, der den fehlenden Termin sowie mindestens einen Serientermin davor und danach enthält, und klicke **Diagnose-ZIP erstellen**.
 
@@ -143,3 +143,7 @@ In **Microsoft 365 → Zahnrad → Einstellungen** können unter **Adressbücher
 ## Kalenderansichten im Microsoft-365-Space
 
 Oberhalb des Kalenders kann zwischen **Monat**, **Woche**, **Tag** und **Agenda** gewechselt werden. Die gewählte Ansicht wird gespeichert; die Navigation ‹ / Heute / › arbeitet passend zur jeweiligen Ansicht.
+
+## V2.36: Erinnerung „Verwerfen“ und „Schlummern“ bleiben lokal
+
+Thunderbird ändert beim Verwerfen oder Schlummern einer Erinnerung nur lokale Alarmdaten. V2.36 erkennt diese Änderungen vor jedem Microsoft-Graph-Schreibzugriff. **Verwerfen** und **Schlummern** zeigen daher keine Versandbestätigung und können kein Meeting-Update versenden. Eine echte Änderung des Erinnerungsvorlaufs (z. B. 15 auf 30 Minuten) bleibt dagegen eine Kalenderänderung und wird synchronisiert.

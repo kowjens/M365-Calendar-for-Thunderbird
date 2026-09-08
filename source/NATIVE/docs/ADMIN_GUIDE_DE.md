@@ -1,4 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.33
+# Administratoranleitung – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -92,7 +92,7 @@ Anschließend **Speichern** und **Microsoft Login** ausführen.
 - **STANDARD**: Microsoft-365-Space, Graph-Kalender, Teams-Termine und Einladungsfunktionen; **keine** native Thunderbird-Kalenderintegration und keine privilegierte Experiment-API.
 - **NATIVE**: zusätzlich echte M365-Kalender in Thunderbirds normaler Kalenderansicht. Dafür verwendet die Erweiterung eine privilegierte Thunderbird Experiment API.
 
-Die öffentlichen NATIVE- und STANDARD-Editionen verwenden getrennte stabile Add-on-IDs. Die für addons.thunderbird.net vorgesehene NATIVE-Edition nutzt `m365-calendar-public@35pwr.com`; STANDARD nutzt `m365-calendar-standard@35pwr.com`.
+Die öffentlichen NATIVE- und STANDARD-Editionen verwenden getrennte stabile Add-on-IDs. Die für addons.thunderbird.net vorgesehene NATIVE-Edition nutzt `m365-calendar-for-thunderbird@3-5pe.com`; STANDARD nutzt `m365-calendar-standard@3-5pe.com`.
 
 ## 6. Native Kalenderintegration und Diagnose
 

@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.33
+# User Guide – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / STANDARD**
 
@@ -101,3 +101,10 @@ Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address b
 ## Calendar views in the Microsoft 365 Space
 
 The Microsoft 365 Space supports **Month**, **Week**, **Day**, and **Agenda** views. The selected view is remembered.
+## V2.35: outgoing-message confirmation
+
+Under **Microsoft 365 → Settings**, **Confirm every outgoing meeting message before Microsoft 365 sends it** is enabled by default. The add-on asks before Graph can send meeting invitations, organizer updates/cancellations or RSVP responses. Cancelling aborts the Graph operation. This does not intercept ordinary Thunderbird composer email.
+
+## V2.36: reminder Dismiss and Snooze stay local
+
+Thunderbird changes local alarm bookkeeping when a reminder is dismissed or snoozed. V2.36 detects these local-only changes before any Microsoft Graph write. **Dismiss** and **Snooze** therefore do not show the outgoing-message confirmation and cannot send a meeting update. Changing the actual reminder offset (for example 15 to 30 minutes) remains a real calendar change and is synchronized.

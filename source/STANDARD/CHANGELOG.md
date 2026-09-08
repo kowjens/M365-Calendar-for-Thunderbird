@@ -1,28 +1,26 @@
-# V2.33
-
-- Public/ATN readiness release; synchronization behavior remains based on V2.32.
-- Stable public add-on ID, `sensitiveDataUpload`, CI/ATN preflight and deterministic packaging.
-- GitHub branding regression test corrected for `Jens Kowalsky, 3-5 Power Electronics GmbH`.
-
-# V2.32
-
-- Added NATIVE calendar diagnostic ZIP export with Graph/Space/native-cache/ICS comparison; diagnostic collection does not trigger native synchronization.
-- UI/manifest version updated to `V2.32` / `2.0.32`.
-
-# V2.30
-
-- Native: all non-online rows use the V2.30 visibility migration; RSVP actions are isolated from meeting PATCH updates.
-- Teams creation in the M365 Space adds the signed-in organizer as a required Graph Event attendee.
-- UI/manifest version updated to `V2.30` / `2.0.30`.
-
-# V2.29
-
-- Native calendar: one-time delete/re-adopt visibility migration for non-online events when the native mapping changes; reconciliation no longer batches mapping repairs so Thunderbird receives the full item observer lifecycle.
-- Microsoft 365 Space: added Month, Week, Day and Agenda views with view-aware navigation and persisted selection.
-- UI version labels now show `V2.29` while the technical manifest version remains `2.0.29`.
-- Author metadata: `Jens Kowalsky, 3-5 Power Electronics GmbH`.
-
 # Changelog
+
+## V2.36
+
+- Fixed Thunderbird reminder **Dismiss/Snooze** being misclassified as an organizer meeting edit.
+- Native provider now detects local-only alarm bookkeeping before calling the extension write handler, preserves the exact Thunderbird item (including alarm acknowledgement/snooze state) and skips Microsoft Graph entirely.
+- Added a second background-level Graph-relevant-field guard before any outgoing-message confirmation or event PATCH.
+- Real event edits, actual reminder-setting changes and RSVP state changes still use the normal guarded Graph paths.
+- The V2.35 default-enabled outgoing-message confirmation remains unchanged for operations that can actually send meeting mail.
+
+## V2.35
+
+- Added a settings switch to confirm every outgoing meeting-related message before Microsoft 365 / Exchange sends it.
+- Confirmation covers invitations, organizer updates, organizer cancellations and RSVP responses across Space, invitation-popup and native-calendar paths.
+- The safety option is enabled by default. Cancelling or closing the confirmation window aborts the Graph action; if the confirmation UI cannot be displayed, nothing is sent.
+- Ordinary Thunderbird composer mail is intentionally outside this add-on-level confirmation gate.
+
+## V2.34
+
+- Recover Teams join links from event body/location when external invitations omit Graph `onlineMeeting.joinUrl`.
+- NATIVE: handle Thunderbird/EWS email iTIP RSVP through Graph response actions and never create a new event for an invitation response.
+- NATIVE: add mail-identity-aware invited-attendee metadata and one-time cache re-adoption.
+- Final public IDs use the `3-5pe.com` domain.
 
 ## V2.32
 - Full one-time native cache re-adoption for all M365 event kinds.

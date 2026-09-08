@@ -124,6 +124,14 @@
           <span id="buildInfo" class="muted"></span>
         </div>
         <div class="info-box wide">
+          <strong data-i18n="outgoingConfirmSettingsTitle">Outgoing message safety</strong>
+          <label class="check-row">
+            <input id="confirmOutgoingMessagesCheck" type="checkbox" checked>
+            <span data-i18n="outgoingConfirmSettingsLabel">Confirm every outgoing meeting message before Microsoft 365 sends it</span>
+          </label>
+          <small data-i18n="outgoingConfirmSettingsHelp">Covers meeting invitations, updates, cancellations and RSVP messages triggered by this add-on. It does not intercept ordinary Thunderbird email.</small>
+        </div>
+        <div class="info-box wide">
           <strong data-i18n="syncCacheTitle">Synchronisation &amp; Offline-Cache</strong>
           <span data-i18n="syncCacheDescription">Der Microsoft-365-Space behält den V1.20-Graph-Cache; die native Kalenderansicht verwendet zusätzlich Thunderbirds eigenen Kalendercache.</span>
           <span id="cacheInfo" class="muted"></span>
@@ -386,6 +394,7 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script src="../lib/native.js"></script>
   <script src="calendar.js"></script>
 </body>
 </html>

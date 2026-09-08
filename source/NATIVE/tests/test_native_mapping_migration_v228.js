@@ -1,7 +1,7 @@
 "use strict";
 const fs=require("fs"),path=require("path"),assert=require("assert");
 const api=fs.readFileSync(path.join(__dirname,"../experiments/nativeCalendar/api.js"),"utf8");
-assert.ok(api.includes('const NATIVE_MAPPING_VERSION = "2.32-full-cache-readopt"'));
+assert.ok(api.includes('const NATIVE_MAPPING_VERSION = "2.34-itip-teams-links"'));
 assert.ok(api.includes('function nativeMappingConforms(item, data, calendar)'));
 assert.ok(api.includes('boolProp("X-M365-APPOINTMENT") !== expectedAppointment'));
 assert.ok(api.includes('boolProp("X-M365-SYNTHETIC-SELF") !== expectedSyntheticSelf'));

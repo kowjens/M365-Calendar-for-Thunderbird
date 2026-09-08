@@ -1133,5 +1133,86 @@
   },
   "diagnosticExportFailed": {
     "message": "Diagnostic export failed: $1"
+  },
+  "outgoingConfirmSettingsTitle": {
+    "message": "Outgoing message safety"
+  },
+  "outgoingConfirmSettingsLabel": {
+    "message": "Confirm every outgoing meeting message before Microsoft 365 sends it"
+  },
+  "outgoingConfirmSettingsHelp": {
+    "message": "Covers meeting invitations, updates, cancellations and RSVP messages triggered by this add-on. It does not intercept ordinary Thunderbird email."
+  },
+  "outgoingConfirmDialogTitle": {
+    "message": "Confirm outgoing message"
+  },
+  "outgoingConfirmDialogIntro": {
+    "message": "Microsoft 365 / Exchange may send an email when this calendar action is executed."
+  },
+  "outgoingConfirmActionLabel": {
+    "message": "Action"
+  },
+  "outgoingConfirmSubjectLabel": {
+    "message": "Event"
+  },
+  "outgoingConfirmRecipientsLabel": {
+    "message": "Recipient(s)"
+  },
+  "outgoingConfirmNoRecipients": {
+    "message": "Microsoft 365 determines the recipient from the meeting."
+  },
+  "outgoingConfirmSend": {
+    "message": "Send / continue"
+  },
+  "outgoingConfirmCancel": {
+    "message": "Cancel"
+  },
+  "outgoingConfirmAutomaticNote": {
+    "message": "Microsoft 365 / Exchange determines the final message and recipients."
+  },
+  "outgoingConfirmRsvpNote": {
+    "message": "This will send your meeting response to the organizer through Microsoft Graph."
+  },
+  "outgoingConfirmMeetingInviteNote": {
+    "message": "Creating this meeting will cause Microsoft 365 / Exchange to send invitations to the listed attendees."
+  },
+  "outgoingConfirmMeetingUpdateNote": {
+    "message": "Saving this organizer-owned meeting may cause Microsoft 365 / Exchange to send a meeting update to attendees."
+  },
+  "outgoingConfirmMeetingCancellationNote": {
+    "message": "Deleting this organizer-owned meeting may cause Microsoft 365 / Exchange to send a cancellation to attendees."
+  },
+  "outgoingActionMeetingInvite": {
+    "message": "Meeting invitation"
+  },
+  "outgoingActionMeetingUpdate": {
+    "message": "Meeting update"
+  },
+  "outgoingActionMeetingCancellation": {
+    "message": "Meeting cancellation"
+  },
+  "outgoingActionRsvpAccept": {
+    "message": "Accept invitation"
+  },
+  "outgoingActionRsvpTentative": {
+    "message": "Tentatively accept invitation"
+  },
+  "outgoingActionRsvpDecline": {
+    "message": "Decline invitation"
+  },
+  "outgoingActionGeneric": {
+    "message": "Outgoing meeting message"
+  },
+  "outgoingNoSubject": {
+    "message": "(no subject)"
+  },
+  "outgoingConfirmationCancelled": {
+    "message": "Outgoing message cancelled by the user."
+  },
+  "outgoingConfirmationExpired": {
+    "message": "This outgoing-message confirmation is no longer active."
+  },
+  "outgoingConfirmationUnavailable": {
+    "message": "The outgoing-message confirmation could not be displayed: $1. Nothing was sent."
   }
 }

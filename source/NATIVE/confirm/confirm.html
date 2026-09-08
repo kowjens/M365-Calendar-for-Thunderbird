@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n="outgoingConfirmDialogTitle">Confirm outgoing message</title>
+  <link rel="stylesheet" href="confirm.css">
+</head>
+<body>
+  <main>
+    <h1 data-i18n="outgoingConfirmDialogTitle">Confirm outgoing message</h1>
+    <p class="intro" data-i18n="outgoingConfirmDialogIntro">Microsoft 365 / Exchange may send an email when this calendar action is executed.</p>
+    <dl>
+      <dt data-i18n="outgoingConfirmActionLabel">Action</dt><dd id="actionText">—</dd>
+      <dt data-i18n="outgoingConfirmSubjectLabel">Event</dt><dd id="subjectText">—</dd>
+      <dt data-i18n="outgoingConfirmRecipientsLabel">Recipient(s)</dt><dd><ul id="recipientList"></ul><span id="noRecipients" class="muted hidden" data-i18n="outgoingConfirmNoRecipients">Microsoft 365 determines the recipient from the meeting.</span></dd>
+    </dl>
+    <p id="noteText" class="note"></p>
+    <p id="errorText" class="error hidden"></p>
+    <div class="actions">
+      <button id="cancelBtn" type="button" data-i18n="outgoingConfirmCancel">Cancel</button>
+      <button id="sendBtn" type="button" class="primary" data-i18n="outgoingConfirmSend">Send / continue</button>
+    </div>
+  </main>
+  <script src="confirm.js"></script>
+</body>
+</html>

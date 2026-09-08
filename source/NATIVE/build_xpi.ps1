@@ -14,6 +14,7 @@ $Items = @(
     (Join-Path $Root "background.js"),
     (Join-Path $Root "calendar"),
     (Join-Path $Root "invite"),
+    (Join-Path $Root "confirm"),
     (Join-Path $Root "lib"),
     (Join-Path $Root "config"),
     (Join-Path $Root "_locales"),

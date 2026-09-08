@@ -6,11 +6,16 @@
 
 Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird** using Microsoft Graph and OAuth2/PKCE, with Teams meeting support, invitation handling and optional integration into Thunderbird's native Calendar UI.
 
-**Version:** 2.0.33 / V2.33  
+**Version:** 2.0.36 / V2.36  
 **Author:** Jens Kowalsky, 3-5 Power Electronics GmbH  
 **License:** Mozilla Public License 2.0
 
 > Independent community project. It is not an official product of Microsoft, Mozilla/Thunderbird, or 3-5 Power Electronics GmbH.
+
+### Outgoing-message confirmation (V2.35)
+
+An optional safety switch, enabled by default, asks for confirmation before this add-on triggers meeting invitations, updates, cancellations or RSVP messages through Microsoft Graph. The dialog shows the action, event and known recipients. Cancelling fails closed and sends nothing. Ordinary Thunderbird composer email is not intercepted.
+
 
 ## Editions
 
@@ -19,8 +24,8 @@ Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla T
 
 The public editions intentionally use different stable add-on IDs:
 
-- NATIVE: `m365-calendar-public@35pwr.com`
-- STANDARD: `m365-calendar-standard@35pwr.com`
+- NATIVE: `m365-calendar-for-thunderbird@3-5pe.com`
+- STANDARD: `m365-calendar-standard@3-5pe.com`
 
 ## Quick start
 
@@ -54,17 +59,22 @@ Detailed setup:
 - Read-only diagnostic export comparing Graph, M365 Space and Thunderbird native cache/range queries
 - No analytics, advertising or project-operated telemetry service
 
-## V2.33
+## V2.36
 
-V2.33 is primarily a **public-release / addons.thunderbird.net readiness release**. Calendar synchronization behavior remains based on V2.32.
+V2.36 prevents Thunderbird-local reminder actions such as **Dismiss** and **Snooze** from reaching Microsoft Graph. Local alarm bookkeeping is kept in Thunderbird only; no outgoing-message confirmation, Graph PATCH or attendee mail is triggered. The V2.35 confirmation gate remains enabled by default for real meeting writes.
 
-- Stable public add-on IDs on the `35pwr.com` domain
-- ATN-required `sensitiveDataUpload` declaration for Microsoft Graph communication
-- NATIVE compatibility capped at Thunderbird `154.*` because the native integration uses an Experiment API
-- GitHub Actions updated to current Node-24-based action generations
-- Fixed the public branding regression test that caused the previous GitHub `Validate` run to fail
-- Deterministic XPI packaging and an additional ATN preflight check
-- Privacy and review documentation expanded for manual ATN review
+## V2.34
+
+V2.34 focuses on **Teams invitation interoperability and safe Thunderbird iTIP handling**.
+
+- Final public NATIVE add-on ID: `m365-calendar-for-thunderbird@3-5pe.com`
+- Public STANDARD ID: `m365-calendar-standard@3-5pe.com`
+- Recover Teams join URLs from external invitation body/location text when Graph does not populate `onlineMeeting.joinUrl`
+- Treat email iTIP Accept/Tentative/Decline as a dedicated Graph RSVP, including the `add/adoptItem()` path used by Thunderbird/EWS
+- Never create a new Graph meeting from an invitation response; unresolved invitation matching fails closed without sending a meeting update
+- Track the Thunderbird mail identity (`imip.identity`) in addition to the Graph account address and mark `X-MOZ-INVITED-ATTENDEE` for native scheduling
+- Re-adopt native cache rows once with mapping marker `2.34-itip-teams-links` so existing items gain the corrected join-link and invitation metadata
+- Keep the previously diagnosed Thunderbird Multiweek rendering issue documented separately; no destructive workaround is applied
 
 ## Known Thunderbird Multiweek display issue
 

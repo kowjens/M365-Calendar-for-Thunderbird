@@ -2,12 +2,12 @@
   "manifest_version": 2,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "2.0.33",
+  "version": "2.0.36",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "default_locale": "de",
   "browser_specific_settings": {
     "gecko": {
-      "id": "m365-calendar-public@35pwr.com",
+      "id": "m365-calendar-for-thunderbird@3-5pe.com",
       "strict_min_version": "128.0",
       "strict_max_version": "154.*"
     }

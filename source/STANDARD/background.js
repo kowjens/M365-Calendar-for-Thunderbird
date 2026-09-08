@@ -1,7 +1,7 @@
 "use strict";
 
-const VERSION = "2.0.33";
-const CONFIG_SCHEMA_VERSION = 205;
+const VERSION = "2.0.36";
+const CONFIG_SCHEMA_VERSION = 206;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
 const SYNC_EVENT_SELECT = "id,subject,start,end,location,organizer,attendees,responseStatus,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,webLink,isOrganizer,type,showAs,sensitivity,body,bodyPreview,isCancelled,isAllDay,iCalUId,uid,seriesMasterId,originalStart,originalStartTimeZone,originalEndTimeZone,recurrence,isReminderOn,reminderMinutesBeforeStart,categories,hideAttendees,lastModifiedDateTime,changeKey";
@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   nativeDaysBefore: 90,
   nativeDaysAfter: 365,
   contactAddressBookIds: ["*"],
+  confirmOutgoingMessages: true,
   configSchemaVersion: CONFIG_SCHEMA_VERSION
 };
 
@@ -31,6 +32,111 @@ function t(key, substitutions) {
 const BASE_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Calendars.ReadWrite"];
 const SCOPES = [...BASE_SCOPES, "Calendars.ReadWrite.Shared"];
 let spaceId = null;
+
+
+// V2.35 outgoing-message safety gate. Microsoft Graph can send meeting
+// invitations, updates, cancellations and RSVP messages as a side effect of
+// calendar writes. Keep that transmission behind one central confirmation
+// dialog so Space, invitation-popup and native-calendar paths behave alike.
+const pendingOutgoingConfirmations = new Map();
+
+function outgoingEmailAddress(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function outgoingRecipients(attendees = []) {
+  const seen = new Set();
+  const result = [];
+  for (const attendee of attendees || []) {
+    const address = outgoingEmailAddress(attendee?.emailAddress?.address || attendee?.address || attendee);
+    if (!address || !address.includes("@") || seen.has(address)) continue;
+    seen.add(address);
+    result.push(address);
+  }
+  return result;
+}
+
+function outgoingActionLabel(kind) {
+  const keys = {
+    meetingInvite: "outgoingActionMeetingInvite",
+    meetingUpdate: "outgoingActionMeetingUpdate",
+    meetingCancellation: "outgoingActionMeetingCancellation",
+    rsvpAccept: "outgoingActionRsvpAccept",
+    rsvpTentative: "outgoingActionRsvpTentative",
+    rsvpDecline: "outgoingActionRsvpDecline"
+  };
+  return t(keys[kind] || "outgoingActionGeneric");
+}
+
+function outgoingResponseKind(response) {
+  if (response === "accept") return "rsvpAccept";
+  if (response === "tentativelyAccept") return "rsvpTentative";
+  if (response === "decline") return "rsvpDecline";
+  return "generic";
+}
+
+function resolveOutgoingConfirmation(token, approved) {
+  const key = String(token || "");
+  const pending = pendingOutgoingConfirmations.get(key);
+  if (!pending) return false;
+  pendingOutgoingConfirmations.delete(key);
+  pending.resolve(Boolean(approved));
+  return true;
+}
+
+function outgoingConfirmationDetails(token) {
+  return pendingOutgoingConfirmations.get(String(token || ""))?.details || null;
+}
+
+if (browser.windows?.onRemoved) {
+  browser.windows.onRemoved.addListener(windowId => {
+    for (const [token, pending] of [...pendingOutgoingConfirmations.entries()]) {
+      if (pending.windowId === windowId) resolveOutgoingConfirmation(token, false);
+    }
+  });
+}
+
+async function requestOutgoingConfirmation({ kind = "generic", subject = "", recipients = [], note = "" } = {}) {
+  const config = await getConfig();
+  if (!config.confirmOutgoingMessages) return true;
+
+  const cleanRecipients = [...new Set((recipients || []).map(outgoingEmailAddress).filter(Boolean))];
+  const token = (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const details = {
+    action: outgoingActionLabel(kind),
+    subject: String(subject || "").trim() || t("outgoingNoSubject"),
+    recipients: cleanRecipients,
+    note: String(note || "").trim() || t("outgoingConfirmAutomaticNote")
+  };
+
+  let settle;
+  const answer = new Promise(resolve => { settle = resolve; });
+  pendingOutgoingConfirmations.set(token, { details, resolve: settle, windowId: null });
+
+  try {
+    if (!browser.windows?.create) throw new Error("windows.create unavailable");
+    const url = browser.runtime.getURL(`confirm/confirm.html?token=${encodeURIComponent(token)}`);
+    const win = await browser.windows.create({ url, type: "popup", width: 620, height: 500 });
+    const pending = pendingOutgoingConfirmations.get(token);
+    if (pending) {
+      pending.windowId = win?.id ?? null;
+      if (pending.windowId == null) throw new Error("confirmation window has no id");
+    }
+    const approved = await answer;
+    if (!approved) {
+      const error = new Error(t("outgoingConfirmationCancelled"));
+      error.userCancelled = true;
+      throw error;
+    }
+    return true;
+  } catch (error) {
+    if (pendingOutgoingConfirmations.has(token)) pendingOutgoingConfirmations.delete(token);
+    if (error?.userCancelled) throw error;
+    const wrapped = new Error(t("outgoingConfirmationUnavailable", error?.message || String(error)));
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
 
 // The native Experiment bridge remains failure-isolated from the STANDARD
 // Graph/UI path. V2.24 performs a delayed provider activation after background
@@ -343,6 +449,7 @@ function normalizeConfig(input = {}) {
     ? [...new Set(clean.contactAddressBookIds.map(value => String(value || "").trim()).filter(Boolean))]
     : ["*"];
   if (clean.contactAddressBookIds.includes("*")) clean.contactAddressBookIds = ["*"];
+  clean.confirmOutgoingMessages = clean.confirmOutgoingMessages !== false;
   clean.configSchemaVersion = CONFIG_SCHEMA_VERSION;
   return clean;
 }
@@ -1098,6 +1205,16 @@ async function respondEvent({ eventId, response, comment = "", sendResponse = tr
   if (!eventId) throw new Error(t("errorEventIdMissing"));
   const body = { sendResponse: Boolean(sendResponse) };
   if (comment && sendResponse) body.comment = String(comment);
+  if (sendResponse) {
+    const event = await graphRequest(`/me/events/${encodeId(eventId)}?$select=id,subject,organizer,attendees,isOrganizer`);
+    const organizerAddress = outgoingEmailAddress(event?.organizer?.emailAddress?.address);
+    await requestOutgoingConfirmation({
+      kind: outgoingResponseKind(response),
+      subject: event?.subject || "",
+      recipients: organizerAddress ? [organizerAddress] : [],
+      note: t("outgoingConfirmRsvpNote")
+    });
+  }
   await graphRequest(`/me/events/${encodeId(eventId)}/${response}`, {
     method: "POST",
     body: JSON.stringify(body)
@@ -1573,6 +1690,16 @@ async function createEvent(payload) {
     ensureTeamsOrganizerAttendee(event, profile, true);
   }
 
+  const createRecipients = outgoingRecipients(event.attendees);
+  if (createRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingInvite",
+      subject: event.subject,
+      recipients: createRecipients,
+      note: t("outgoingConfirmMeetingInviteNote")
+    });
+  }
+
   const created = await graphRequest(`/me/calendars/${encodeId(payload.calendarId)}/events`, {
     method: "POST",
     body: JSON.stringify(event)
@@ -1594,6 +1721,18 @@ async function updateEvent(payload) {
   // Graph does not accept attendees when an attendee edits an organizer-owned meeting.
   if (payload.includeAttendees === false) delete patch.attendees;
   if (payload.includeRecurrence === false) delete patch.recurrence;
+  if (config.confirmOutgoingMessages) {
+    const current = await getGraphEventForNative(payload.eventId, payload.calendarId || "");
+    const recipients = outgoingRecipients(current?.attendees);
+    if (current?.isOrganizer && recipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingUpdate",
+        subject: current?.subject || patch.subject || "",
+        recipients,
+        note: t("outgoingConfirmMeetingUpdateNote")
+      });
+    }
+  }
   const eventPath = payload.calendarId
     ? `/me/calendars/${encodeId(payload.calendarId)}/events/${encodeId(payload.eventId)}`
     : `/me/events/${encodeId(payload.eventId)}`;
@@ -1613,6 +1752,19 @@ async function updateEvent(payload) {
 
 async function deleteEvent({ eventId, calendarId = "" }) {
   if (!eventId) throw new Error(t("errorEventIdMissing"));
+  const config = await getConfig();
+  if (config.confirmOutgoingMessages) {
+    const current = await getGraphEventForNative(eventId, calendarId || "");
+    const recipients = outgoingRecipients(current?.attendees);
+    if (current?.isOrganizer && recipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingCancellation",
+        subject: current?.subject || "",
+        recipients,
+        note: t("outgoingConfirmMeetingCancellationNote")
+      });
+    }
+  }
   const eventPath = calendarId
     ? `/me/calendars/${encodeId(calendarId)}/events/${encodeId(eventId)}`
     : `/me/events/${encodeId(eventId)}`;
@@ -1967,6 +2119,15 @@ async function nativeSyncHandler(calendar) {
 async function nativeCreateHandler(calendar, item) {
   if (!calendar?.graphCalendarId) throw new Error(t("nativeErrorCalendarIdMissing"));
   const payload = M365_NATIVE.nativeItemToGraphPayload(item);
+  const nativeCreateRecipients = outgoingRecipients(payload.attendees);
+  if (nativeCreateRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingInvite",
+      subject: payload.subject || item?.title || "",
+      recipients: nativeCreateRecipients,
+      note: t("outgoingConfirmMeetingInviteNote")
+    });
+  }
   const created = await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events`, {
     method: "POST",
     headers: nativeGraphHeaders(),
@@ -2011,6 +2172,15 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
     }
   } else {
     const payload = M365_NATIVE.nativeItemToGraphPayload(item);
+    const nativeUpdateRecipients = outgoingRecipients(oldItem?.attendees?.length ? oldItem.attendees : item?.attendees);
+    if (nativeUpdateRecipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingUpdate",
+        subject: oldItem?.title || item?.title || payload.subject || "",
+        recipients: nativeUpdateRecipients,
+        note: t("outgoingConfirmMeetingUpdateNote")
+      });
+    }
     await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(item.id)}`, {
       method: "PATCH",
       headers: nativeGraphHeaders(),
@@ -2026,6 +2196,18 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
 
 async function nativeRemoveHandler(calendar, item, options = {}) {
   if (!item?.id) throw new Error(t("errorEventIdMissing"));
+  const ownAddresses = nativeCalendarAddresses(calendar);
+  const organizer = outgoingEmailAddress(item?.organizer?.address);
+  const isOrganizer = Boolean(item?.isOrganizer || (organizer && ownAddresses.includes(organizer)));
+  const nativeDeleteRecipients = outgoingRecipients(item?.attendees);
+  if (isOrganizer && nativeDeleteRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingCancellation",
+      subject: item?.title || "",
+      recipients: nativeDeleteRecipients,
+      note: t("outgoingConfirmMeetingCancellationNote")
+    });
+  }
   await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(item.id)}`, { method: "DELETE" });
   if (calendar?.graphCalendarId) rememberNativeDelete(calendar.graphCalendarId, item.id);
   await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
@@ -2371,6 +2553,13 @@ browser.runtime.onMessage.addListener(async message => {
     switch (message?.action) {
       case "getConfig": return { ok: true, data: await getConfig() };
       case "saveConfig": return { ok: true, data: await saveConfig(message.config || {}) };
+      case "getOutgoingConfirmation": {
+        const details = outgoingConfirmationDetails(message.token);
+        if (!details) throw new Error(t("outgoingConfirmationExpired"));
+        return { ok: true, data: details };
+      }
+      case "resolveOutgoingConfirmation":
+        return { ok: true, data: { resolved: resolveOutgoingConfirmation(message.token, Boolean(message.approved)) } };
       case "authStatus": return { ok: true, data: await authStatus() };
       case "login": return { ok: true, data: await login() };
       case "logout": {

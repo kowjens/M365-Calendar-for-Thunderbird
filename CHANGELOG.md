@@ -1,5 +1,29 @@
 # Changelog
 
+## V2.36
+
+- Fixed Thunderbird reminder **Dismiss/Snooze** being misclassified as an organizer meeting edit.
+- Native provider now detects local-only alarm bookkeeping before calling the extension write handler, preserves the exact Thunderbird item (including alarm acknowledgement/snooze state) and skips Microsoft Graph entirely.
+- Added a second background-level Graph-relevant-field guard before any outgoing-message confirmation or event PATCH.
+- Real event edits, actual reminder-setting changes and RSVP state changes still use the normal guarded Graph paths.
+- The V2.35 default-enabled outgoing-message confirmation remains unchanged for operations that can actually send meeting mail.
+
+## V2.35
+
+- Added a settings switch to confirm every outgoing meeting-related message before Microsoft 365 / Exchange sends it.
+- Confirmation covers invitations, organizer updates, organizer cancellations and RSVP responses across Space, invitation-popup and native-calendar paths.
+- The safety option is enabled by default. Cancelling or closing the confirmation window aborts the Graph action; if the confirmation UI cannot be displayed, nothing is sent.
+- Ordinary Thunderbird composer mail is intentionally outside this add-on-level confirmation gate.
+
+## V2.34
+
+- Fixed missing **Join meeting** actions for external Teams invitations where Exchange/Graph keeps the Teams URL only in the event body/location instead of `onlineMeeting.joinUrl`.
+- Added a fail-closed native email-iTIP RSVP path: Accept/Tentative/Decline through Thunderbird/EWS is matched to the existing Graph event and uses the dedicated Graph response action instead of creating a new meeting.
+- Added native mail-identity awareness and `X-MOZ-INVITED-ATTENDEE` metadata for Thunderbird scheduling.
+- Bumped the native mapping schema to `2.34-itip-teams-links` for a one-time re-adoption of cached items.
+- Finalized the public NATIVE ID as `m365-calendar-for-thunderbird@3-5pe.com`; public STANDARD uses `m365-calendar-standard@3-5pe.com`.
+- Retained the diagnosed Thunderbird Multiweek rendering issue as a host-UI known issue rather than applying a destructive synchronization workaround.
+
 ## V2.33
 
 - ATN/publication readiness release; synchronization behavior remains based on V2.32.

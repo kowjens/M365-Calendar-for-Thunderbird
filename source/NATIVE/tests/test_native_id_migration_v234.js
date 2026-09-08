@@ -1,0 +1,11 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const api = fs.readFileSync(path.resolve(__dirname,"../experiments/nativeCalendar/api.js"),"utf8");
+assert.ok(api.includes("function isM365SiblingCalendar(calendar, extension, desiredGraphIds = null)"));
+assert.ok(api.includes('desiredGraphIds.has(graphId)'));
+assert.ok(api.includes('snapshotCalendarUserPrefs(extension, calendar, true)'));
+assert.ok(api.includes('cal.manager.unregisterCalendar(calendar)'));
+assert.ok(api.includes('migrateSiblingCalendar:'));
+console.log("V2.34 native provider-ID migration contract passed");

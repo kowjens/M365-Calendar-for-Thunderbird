@@ -1,4 +1,4 @@
-# Administrator Guide – M365 Calendar for Thunderbird V2.33
+# Administrator Guide – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -92,7 +92,7 @@ Select **Save**, then run **Microsoft Login**.
 - **STANDARD**: Microsoft 365 Space, Graph calendar, Teams events and invitation functions; **no** native Thunderbird calendar provider and no privileged Experiment API.
 - **NATIVE**: additionally exposes M365 calendars in Thunderbird's built-in Calendar view and therefore uses a privileged Thunderbird Experiment API.
 
-The public NATIVE and STANDARD editions use separate stable add-on IDs. The NATIVE edition intended for addons.thunderbird.net uses `m365-calendar-public@35pwr.com`; STANDARD uses `m365-calendar-standard@35pwr.com`.
+The public NATIVE and STANDARD editions use separate stable add-on IDs. The NATIVE edition intended for addons.thunderbird.net uses `m365-calendar-for-thunderbird@3-5pe.com`; STANDARD uses `m365-calendar-standard@3-5pe.com`.
 
 ## 6. Native calendar integration and diagnostics
 
@@ -118,7 +118,7 @@ trace:
 
 Send the block unchanged to the administrator/support contact when possible.
 
-### Diagnostic export (V2.33)
+### Diagnostic export (V2.34)
 
 The NATIVE build can create a **read-only diagnostic export**. It reads the selected Graph `calendarView` live, then captures the Space cache and the actual Thunderbird provider cache. It deliberately does **not** call `syncNativeCalendars()`.
 

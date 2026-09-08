@@ -1,7 +1,7 @@
 "use strict";
 
-const VERSION = "2.0.33";
-const CONFIG_SCHEMA_VERSION = 205;
+const VERSION = "2.0.36";
+const CONFIG_SCHEMA_VERSION = 206;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
 const SYNC_EVENT_SELECT = "id,subject,start,end,location,organizer,attendees,responseStatus,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,webLink,isOrganizer,type,showAs,sensitivity,body,bodyPreview,isCancelled,isAllDay,iCalUId,uid,seriesMasterId,originalStart,originalStartTimeZone,originalEndTimeZone,recurrence,isReminderOn,reminderMinutesBeforeStart,categories,hideAttendees,lastModifiedDateTime,changeKey";
@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   nativeDaysBefore: 90,
   nativeDaysAfter: 365,
   contactAddressBookIds: ["*"],
+  confirmOutgoingMessages: true,
   configSchemaVersion: CONFIG_SCHEMA_VERSION
 };
 
@@ -31,6 +32,111 @@ function t(key, substitutions) {
 const BASE_SCOPES = ["openid", "profile", "offline_access", "User.Read", "Calendars.ReadWrite"];
 const SCOPES = [...BASE_SCOPES, "Calendars.ReadWrite.Shared"];
 let spaceId = null;
+
+
+// V2.35 outgoing-message safety gate. Microsoft Graph can send meeting
+// invitations, updates, cancellations and RSVP messages as a side effect of
+// calendar writes. Keep that transmission behind one central confirmation
+// dialog so Space, invitation-popup and native-calendar paths behave alike.
+const pendingOutgoingConfirmations = new Map();
+
+function outgoingEmailAddress(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function outgoingRecipients(attendees = []) {
+  const seen = new Set();
+  const result = [];
+  for (const attendee of attendees || []) {
+    const address = outgoingEmailAddress(attendee?.emailAddress?.address || attendee?.address || attendee);
+    if (!address || !address.includes("@") || seen.has(address)) continue;
+    seen.add(address);
+    result.push(address);
+  }
+  return result;
+}
+
+function outgoingActionLabel(kind) {
+  const keys = {
+    meetingInvite: "outgoingActionMeetingInvite",
+    meetingUpdate: "outgoingActionMeetingUpdate",
+    meetingCancellation: "outgoingActionMeetingCancellation",
+    rsvpAccept: "outgoingActionRsvpAccept",
+    rsvpTentative: "outgoingActionRsvpTentative",
+    rsvpDecline: "outgoingActionRsvpDecline"
+  };
+  return t(keys[kind] || "outgoingActionGeneric");
+}
+
+function outgoingResponseKind(response) {
+  if (response === "accept") return "rsvpAccept";
+  if (response === "tentativelyAccept") return "rsvpTentative";
+  if (response === "decline") return "rsvpDecline";
+  return "generic";
+}
+
+function resolveOutgoingConfirmation(token, approved) {
+  const key = String(token || "");
+  const pending = pendingOutgoingConfirmations.get(key);
+  if (!pending) return false;
+  pendingOutgoingConfirmations.delete(key);
+  pending.resolve(Boolean(approved));
+  return true;
+}
+
+function outgoingConfirmationDetails(token) {
+  return pendingOutgoingConfirmations.get(String(token || ""))?.details || null;
+}
+
+if (browser.windows?.onRemoved) {
+  browser.windows.onRemoved.addListener(windowId => {
+    for (const [token, pending] of [...pendingOutgoingConfirmations.entries()]) {
+      if (pending.windowId === windowId) resolveOutgoingConfirmation(token, false);
+    }
+  });
+}
+
+async function requestOutgoingConfirmation({ kind = "generic", subject = "", recipients = [], note = "" } = {}) {
+  const config = await getConfig();
+  if (!config.confirmOutgoingMessages) return true;
+
+  const cleanRecipients = [...new Set((recipients || []).map(outgoingEmailAddress).filter(Boolean))];
+  const token = (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const details = {
+    action: outgoingActionLabel(kind),
+    subject: String(subject || "").trim() || t("outgoingNoSubject"),
+    recipients: cleanRecipients,
+    note: String(note || "").trim() || t("outgoingConfirmAutomaticNote")
+  };
+
+  let settle;
+  const answer = new Promise(resolve => { settle = resolve; });
+  pendingOutgoingConfirmations.set(token, { details, resolve: settle, windowId: null });
+
+  try {
+    if (!browser.windows?.create) throw new Error("windows.create unavailable");
+    const url = browser.runtime.getURL(`confirm/confirm.html?token=${encodeURIComponent(token)}`);
+    const win = await browser.windows.create({ url, type: "popup", width: 620, height: 500 });
+    const pending = pendingOutgoingConfirmations.get(token);
+    if (pending) {
+      pending.windowId = win?.id ?? null;
+      if (pending.windowId == null) throw new Error("confirmation window has no id");
+    }
+    const approved = await answer;
+    if (!approved) {
+      const error = new Error(t("outgoingConfirmationCancelled"));
+      error.userCancelled = true;
+      throw error;
+    }
+    return true;
+  } catch (error) {
+    if (pendingOutgoingConfirmations.has(token)) pendingOutgoingConfirmations.delete(token);
+    if (error?.userCancelled) throw error;
+    const wrapped = new Error(t("outgoingConfirmationUnavailable", error?.message || String(error)));
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
 
 // The native Experiment bridge remains failure-isolated from the STANDARD
 // Graph/UI path. V2.24 performs a delayed provider activation after background
@@ -343,6 +449,7 @@ function normalizeConfig(input = {}) {
     ? [...new Set(clean.contactAddressBookIds.map(value => String(value || "").trim()).filter(Boolean))]
     : ["*"];
   if (clean.contactAddressBookIds.includes("*")) clean.contactAddressBookIds = ["*"];
+  clean.confirmOutgoingMessages = clean.confirmOutgoingMessages !== false;
   clean.configSchemaVersion = CONFIG_SCHEMA_VERSION;
   return clean;
 }
@@ -1098,6 +1205,16 @@ async function respondEvent({ eventId, response, comment = "", sendResponse = tr
   if (!eventId) throw new Error(t("errorEventIdMissing"));
   const body = { sendResponse: Boolean(sendResponse) };
   if (comment && sendResponse) body.comment = String(comment);
+  if (sendResponse) {
+    const event = await graphRequest(`/me/events/${encodeId(eventId)}?$select=id,subject,organizer,attendees,isOrganizer`);
+    const organizerAddress = outgoingEmailAddress(event?.organizer?.emailAddress?.address);
+    await requestOutgoingConfirmation({
+      kind: outgoingResponseKind(response),
+      subject: event?.subject || "",
+      recipients: organizerAddress ? [organizerAddress] : [],
+      note: t("outgoingConfirmRsvpNote")
+    });
+  }
   await graphRequest(`/me/events/${encodeId(eventId)}/${response}`, {
     method: "POST",
     body: JSON.stringify(body)
@@ -1573,6 +1690,16 @@ async function createEvent(payload) {
     ensureTeamsOrganizerAttendee(event, profile, true);
   }
 
+  const createRecipients = outgoingRecipients(event.attendees);
+  if (createRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingInvite",
+      subject: event.subject,
+      recipients: createRecipients,
+      note: t("outgoingConfirmMeetingInviteNote")
+    });
+  }
+
   const created = await graphRequest(`/me/calendars/${encodeId(payload.calendarId)}/events`, {
     method: "POST",
     body: JSON.stringify(event)
@@ -1594,6 +1721,18 @@ async function updateEvent(payload) {
   // Graph does not accept attendees when an attendee edits an organizer-owned meeting.
   if (payload.includeAttendees === false) delete patch.attendees;
   if (payload.includeRecurrence === false) delete patch.recurrence;
+  if (config.confirmOutgoingMessages) {
+    const current = await getGraphEventForNative(payload.eventId, payload.calendarId || "");
+    const recipients = outgoingRecipients(current?.attendees);
+    if (current?.isOrganizer && recipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingUpdate",
+        subject: current?.subject || patch.subject || "",
+        recipients,
+        note: t("outgoingConfirmMeetingUpdateNote")
+      });
+    }
+  }
   const eventPath = payload.calendarId
     ? `/me/calendars/${encodeId(payload.calendarId)}/events/${encodeId(payload.eventId)}`
     : `/me/events/${encodeId(payload.eventId)}`;
@@ -1613,6 +1752,19 @@ async function updateEvent(payload) {
 
 async function deleteEvent({ eventId, calendarId = "" }) {
   if (!eventId) throw new Error(t("errorEventIdMissing"));
+  const config = await getConfig();
+  if (config.confirmOutgoingMessages) {
+    const current = await getGraphEventForNative(eventId, calendarId || "");
+    const recipients = outgoingRecipients(current?.attendees);
+    if (current?.isOrganizer && recipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingCancellation",
+        subject: current?.subject || "",
+        recipients,
+        note: t("outgoingConfirmMeetingCancellationNote")
+      });
+    }
+  }
   const eventPath = calendarId
     ? `/me/calendars/${encodeId(calendarId)}/events/${encodeId(eventId)}`
     : `/me/events/${encodeId(eventId)}`;
@@ -2210,9 +2362,79 @@ async function nativeSyncHandler(calendar) {
   };
 }
 
-async function nativeCreateHandler(calendar, item) {
+function nativeCalendarAddresses(calendar) {
+  return [calendar?.organizerId, calendar?.identityEmail]
+    .map(value => M365_NATIVE.cleanAddress(value))
+    .filter(Boolean);
+}
+
+function nativePlainItemAsInvitation(item) {
+  return {
+    method: "REQUEST",
+    uid: String(item?.iCalUId || item?.nativeUid || item?.id || ""),
+    summary: String(item?.title || ""),
+    location: String(item?.location || ""),
+    organizer: item?.organizer?.address
+      ? { address: String(item.organizer.address), name: String(item.organizer.name || "") }
+      : null,
+    attendees: Array.isArray(item?.attendees) ? item.attendees : [],
+    start: item?.start ? { iso: String(item.start) } : null,
+    end: item?.end ? { iso: String(item.end) } : null,
+    recurrenceId: null,
+    status: String(item?.status || ""),
+    sequence: 0
+  };
+}
+
+async function nativeCreateHandler(calendar, item, options = {}) {
   if (!calendar?.graphCalendarId) throw new Error(t("nativeErrorCalendarIdMissing"));
+
+  const ownAddresses = [...new Set([
+    ...nativeCalendarAddresses(calendar),
+    M365_NATIVE.cleanAddress(item?.invitedAttendee)
+  ].filter(Boolean))];
+  const responseAction = M365_NATIVE.responseActionForUser(item, ownAddresses);
+  const organizer = M365_NATIVE.cleanAddress(item?.organizer?.address);
+  const isExternalOrganizer = Boolean(organizer && !ownAddresses.includes(organizer));
+  const isInvitationOperation = Boolean(options?.invitation || isExternalOrganizer);
+
+  // V2.34: Thunderbird can route an email iTIP response through add/adoptItem.
+  // Never POST that item as a new Graph event: doing so turns the attendee into
+  // an organizer and sends a new meeting request to the participants.
+  if (isInvitationOperation) {
+    if (!responseAction) {
+      throw new Error("Invitation operation has no attendee response state; no new meeting was created.");
+    }
+    const match = await findEventForInvitation(nativePlainItemAsInvitation(item));
+    if (!match?.event?.id) {
+      throw new Error("Could not match the invitation to an existing Microsoft 365 event; no new meeting was created.");
+    }
+    if (match.event.isOrganizer) {
+      throw new Error("The matched Microsoft 365 event belongs to the organizer and cannot be answered as an invitation.");
+    }
+    await respondEvent({
+      eventId: match.event.id,
+      response: responseAction,
+      comment: "",
+      sendResponse: true
+    });
+    await invalidateAfterNativeWrite(calendar.graphCalendarId);
+    const updated = await getGraphEventForNative(match.event.id, calendar.graphCalendarId);
+    const complete = updated?.id ? updated : match.event;
+    if (complete?.id) rememberNativeUpsert(calendar.graphCalendarId, complete);
+    return { ...M365_NATIVE.graphEventToNative(complete), nativeOperation: "rsvp-existing" };
+  }
+
   const payload = M365_NATIVE.nativeItemToGraphPayload(item);
+  const nativeCreateRecipients = outgoingRecipients(payload.attendees);
+  if (nativeCreateRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingInvite",
+      subject: payload.subject || item?.title || "",
+      recipients: nativeCreateRecipients,
+      note: t("outgoingConfirmMeetingInviteNote")
+    });
+  }
   const created = await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events`, {
     method: "POST",
     headers: nativeGraphHeaders(),
@@ -2226,7 +2448,11 @@ async function nativeCreateHandler(calendar, item) {
 
 async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
   if (!item?.id) throw new Error(t("errorEventIdMissing"));
-  const me = String(calendar?.organizerId || "").trim().toLowerCase();
+  const ownAddresses = [...new Set([
+    ...nativeCalendarAddresses(calendar),
+    M365_NATIVE.cleanAddress(item?.invitedAttendee),
+    M365_NATIVE.cleanAddress(oldItem?.invitedAttendee)
+  ].filter(Boolean))];
 
   // V2.30: RSVP is a dedicated Graph action, not an event PATCH. Thunderbird
   // may temporarily rewrite organizer metadata while accepting/declining a
@@ -2234,7 +2460,7 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
   // classification and return immediately after the response endpoint. This
   // prevents an Accept operation from being misinterpreted as an organizer
   // edit that resends the original meeting to all attendees.
-  const responseAction = M365_NATIVE.responseChangeForUser(item, oldItem, me);
+  const responseAction = M365_NATIVE.responseChangeForUser(item, oldItem, ownAddresses);
   if (responseAction) {
     await respondEvent({
       eventId: item.id,
@@ -2248,10 +2474,22 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
     return M365_NATIVE.graphEventToNative(updated);
   }
 
+  if (options?.invitation) {
+    throw new Error("Invitation response could not be determined; no meeting update was sent.");
+  }
+
+  // V2.36: Thunderbird modifies local alarm bookkeeping when reminders are
+  // dismissed or snoozed. If none of the fields this add-on can write to Graph
+  // changed, this is a local-only calendar mutation. Never show an outgoing
+  // confirmation and never PATCH Microsoft Graph for such operations.
+  if (M365_NATIVE.nativeGraphRelevantEqual(item, oldItem)) {
+    return { ...item, nativeOperation: "local-only" };
+  }
+
   // Prefer the old server-derived organizer snapshot. The mutable item received
   // from Thunderbird is not authoritative during scheduling actions.
-  const organizer = String(oldItem?.organizer?.address || item?.organizer?.address || "").trim().toLowerCase();
-  const isOrganizer = Boolean(oldItem?.isOrganizer || (me && organizer && me === organizer));
+  const organizer = M365_NATIVE.cleanAddress(oldItem?.organizer?.address || item?.organizer?.address || "");
+  const isOrganizer = Boolean(oldItem?.isOrganizer || (organizer && ownAddresses.includes(organizer)));
 
   if (!isOrganizer && organizer) {
     // An attendee may safely change their own reminder. Other meeting fields
@@ -2270,6 +2508,15 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
     }
   } else {
     const payload = M365_NATIVE.nativeItemToGraphPayload(item);
+    const nativeUpdateRecipients = outgoingRecipients(oldItem?.attendees?.length ? oldItem.attendees : item?.attendees);
+    if (nativeUpdateRecipients.length) {
+      await requestOutgoingConfirmation({
+        kind: "meetingUpdate",
+        subject: oldItem?.title || item?.title || payload.subject || "",
+        recipients: nativeUpdateRecipients,
+        note: t("outgoingConfirmMeetingUpdateNote")
+      });
+    }
     await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(item.id)}`, {
       method: "PATCH",
       headers: nativeGraphHeaders(),
@@ -2285,6 +2532,18 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
 
 async function nativeRemoveHandler(calendar, item, options = {}) {
   if (!item?.id) throw new Error(t("errorEventIdMissing"));
+  const ownAddresses = nativeCalendarAddresses(calendar);
+  const organizer = outgoingEmailAddress(item?.organizer?.address);
+  const isOrganizer = Boolean(item?.isOrganizer || (organizer && ownAddresses.includes(organizer)));
+  const nativeDeleteRecipients = outgoingRecipients(item?.attendees);
+  if (isOrganizer && nativeDeleteRecipients.length) {
+    await requestOutgoingConfirmation({
+      kind: "meetingCancellation",
+      subject: item?.title || "",
+      recipients: nativeDeleteRecipients,
+      note: t("outgoingConfirmMeetingCancellationNote")
+    });
+  }
   await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(item.id)}`, { method: "DELETE" });
   if (calendar?.graphCalendarId) rememberNativeDelete(calendar.graphCalendarId, item.id);
   await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
@@ -2630,6 +2889,13 @@ browser.runtime.onMessage.addListener(async message => {
     switch (message?.action) {
       case "getConfig": return { ok: true, data: await getConfig() };
       case "saveConfig": return { ok: true, data: await saveConfig(message.config || {}) };
+      case "getOutgoingConfirmation": {
+        const details = outgoingConfirmationDetails(message.token);
+        if (!details) throw new Error(t("outgoingConfirmationExpired"));
+        return { ok: true, data: details };
+      }
+      case "resolveOutgoingConfirmation":
+        return { ok: true, data: { resolved: resolveOutgoingConfirmation(message.token, Boolean(message.approved)) } };
       case "authStatus": return { ok: true, data: await authStatus() };
       case "login": return { ok: true, data: await login() };
       case "logout": {

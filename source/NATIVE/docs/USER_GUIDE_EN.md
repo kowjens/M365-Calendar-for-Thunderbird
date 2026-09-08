@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.33
+# User Guide – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -147,3 +147,10 @@ The Microsoft 365 Space supports **Month**, **Week**, **Day**, and **Agenda** vi
 
 ### V2.32+ native range diagnostics
 `native_range_queries.json` records the actual `cache.sqlite` range queries using Thunderbird event/occurrence filter masks. It is intended to distinguish “row exists in cache” from “row is returned to the calendar view”.
+## V2.35: outgoing-message confirmation
+
+Under **Microsoft 365 → Settings**, **Confirm every outgoing meeting message before Microsoft 365 sends it** is enabled by default. The add-on asks before Graph can send meeting invitations, organizer updates/cancellations or RSVP responses. Cancelling aborts the Graph operation. This does not intercept ordinary Thunderbird composer email.
+
+## V2.36: reminder Dismiss and Snooze stay local
+
+Thunderbird changes local alarm bookkeeping when a reminder is dismissed or snoozed. V2.36 detects these local-only changes before any Microsoft Graph write. **Dismiss** and **Snooze** therefore do not show the outgoing-message confirmation and cannot send a meeting update. Changing the actual reminder offset (for example 15 to 30 minutes) remains a real calendar change and is synchronized.

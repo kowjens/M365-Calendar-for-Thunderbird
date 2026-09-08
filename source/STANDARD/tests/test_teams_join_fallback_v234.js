@@ -1,0 +1,14 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const native = require("../lib/native.js");
+const join = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ABC%40thread.v2/0?context=%7B%22Tid%22%3A%22tenant%22%7D&foo=bar";
+const event = { isOnlineMeeting:false, body:{content:`<a href="${join.replace(/&/g,"&amp;")}">Join</a>`} };
+assert.strictEqual(native.extractTeamsJoinUrl(event), join);
+assert.strictEqual(native.graphEventToNative(event).isOnlineMeeting, true);
+const calendarJs = fs.readFileSync(path.resolve(__dirname,"../calendar/calendar.js"),"utf8");
+const calendarHtml = fs.readFileSync(path.resolve(__dirname,"../calendar/calendar.html"),"utf8");
+assert.ok(calendarJs.includes("M365_NATIVE.extractTeamsJoinUrl(event)"));
+assert.ok(calendarHtml.includes('../lib/native.js'));
+console.log("V2.34 STANDARD external Teams join-link fallback passed");

@@ -1133,5 +1133,86 @@
   },
   "diagnosticExportFailed": {
     "message": "Diagnoseexport fehlgeschlagen: $1"
+  },
+  "outgoingConfirmSettingsTitle": {
+    "message": "Sicherheit für ausgehende Nachrichten"
+  },
+  "outgoingConfirmSettingsLabel": {
+    "message": "Jede ausgehende Termin-Nachricht vor dem Versand durch Microsoft 365 bestätigen"
+  },
+  "outgoingConfirmSettingsHelp": {
+    "message": "Gilt für Einladungen, Termin-Updates, Absagen und RSVP-Antworten, die dieses Add-on auslöst. Normale Thunderbird-E-Mails werden nicht abgefangen."
+  },
+  "outgoingConfirmDialogTitle": {
+    "message": "Ausgehende Nachricht bestätigen"
+  },
+  "outgoingConfirmDialogIntro": {
+    "message": "Microsoft 365 / Exchange kann bei dieser Kalenderaktion eine E-Mail versenden."
+  },
+  "outgoingConfirmActionLabel": {
+    "message": "Aktion"
+  },
+  "outgoingConfirmSubjectLabel": {
+    "message": "Termin"
+  },
+  "outgoingConfirmRecipientsLabel": {
+    "message": "Empfänger"
+  },
+  "outgoingConfirmNoRecipients": {
+    "message": "Microsoft 365 bestimmt den Empfänger aus dem Termin."
+  },
+  "outgoingConfirmSend": {
+    "message": "Senden / fortfahren"
+  },
+  "outgoingConfirmCancel": {
+    "message": "Abbrechen"
+  },
+  "outgoingConfirmAutomaticNote": {
+    "message": "Microsoft 365 / Exchange bestimmt die endgültige Nachricht und die tatsächlichen Empfänger."
+  },
+  "outgoingConfirmRsvpNote": {
+    "message": "Dadurch wird deine Terminantwort über Microsoft Graph an den Organisator gesendet."
+  },
+  "outgoingConfirmMeetingInviteNote": {
+    "message": "Beim Anlegen dieses Termins sendet Microsoft 365 / Exchange Einladungen an die aufgeführten Teilnehmer."
+  },
+  "outgoingConfirmMeetingUpdateNote": {
+    "message": "Beim Speichern dieses vom Organisator verwalteten Termins kann Microsoft 365 / Exchange ein Termin-Update an die Teilnehmer senden."
+  },
+  "outgoingConfirmMeetingCancellationNote": {
+    "message": "Beim Löschen dieses vom Organisator verwalteten Termins kann Microsoft 365 / Exchange eine Absage an die Teilnehmer senden."
+  },
+  "outgoingActionMeetingInvite": {
+    "message": "Termineinladung"
+  },
+  "outgoingActionMeetingUpdate": {
+    "message": "Termin-Update"
+  },
+  "outgoingActionMeetingCancellation": {
+    "message": "Terminabsage"
+  },
+  "outgoingActionRsvpAccept": {
+    "message": "Einladung annehmen"
+  },
+  "outgoingActionRsvpTentative": {
+    "message": "Einladung mit Vorbehalt annehmen"
+  },
+  "outgoingActionRsvpDecline": {
+    "message": "Einladung ablehnen"
+  },
+  "outgoingActionGeneric": {
+    "message": "Ausgehende Termin-Nachricht"
+  },
+  "outgoingNoSubject": {
+    "message": "(ohne Betreff)"
+  },
+  "outgoingConfirmationCancelled": {
+    "message": "Ausgehende Nachricht vom Benutzer abgebrochen."
+  },
+  "outgoingConfirmationExpired": {
+    "message": "Diese Bestätigung für die ausgehende Nachricht ist nicht mehr aktiv."
+  },
+  "outgoingConfirmationUnavailable": {
+    "message": "Die Bestätigung für die ausgehende Nachricht konnte nicht angezeigt werden: $1. Es wurde nichts gesendet."
   }
 }

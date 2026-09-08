@@ -26,7 +26,7 @@ The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. T
 
 Outputs:
 
-- `release/M365_Thunderbird_Calendar_V2.33_NATIVE.xpi`
-- `release/M365_Thunderbird_Calendar_V2.33_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.36_NATIVE.xpi`
+- `release/M365_Thunderbird_Calendar_V2.36_STANDARD.xpi`
 
 The NATIVE XPI is the package intended for addons.thunderbird.net. It contains the Thunderbird Experiment API needed for native Calendar integration.

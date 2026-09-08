@@ -29,3 +29,7 @@ That means the event was available to Thunderbird in both cases and the differen
 ## Create a diagnostic ZIP
 
 In the NATIVE edition open Microsoft 365 → Settings → Native Thunderbird calendar integration and create a diagnostic ZIP for the affected period. OAuth access/refresh tokens are excluded, but event content and attendee addresses can be included.
+
+## Reminder Dismiss/Snooze must not send meeting updates (V2.36)
+
+V2.35 could interpret Thunderbird's local alarm acknowledgement change as a native calendar `modifyItem()` and, for organizer-owned meetings, offer to send a meeting update. V2.36 classifies unchanged Graph-relevant event data as **local-only**. Dismiss/Snooze is written only to Thunderbird's cache; there is no Graph PATCH and no outgoing-message confirmation. If a confirmation still appears after Dismiss on V2.36, capture a diagnostic export before confirming anything.

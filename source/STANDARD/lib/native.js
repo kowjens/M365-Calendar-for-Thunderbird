@@ -114,9 +114,76 @@
     };
   }
 
+  function decodeUrlEntities(value) {
+    return cleanString(value)
+      .replace(/&amp;/gi, "&")
+      .replace(/&#0*38;/gi, "&")
+      .replace(/&#x0*26;/gi, "&")
+      .replace(/&quot;/gi, '\"')
+      .replace(/&#0*34;/gi, '\"')
+      .replace(/&#x0*22;/gi, '\"');
+  }
+
+  function validUrl(value) {
+    const raw = decodeUrlEntities(value).trim();
+    if (!raw) return "";
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return "";
+      return parsed.href;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function teamsUrlFromText(value) {
+    const text = decodeUrlEntities(value);
+    if (!text) return "";
+    const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || [];
+    for (let raw of matches) {
+      raw = raw.replace(/[),.;}\]]+$/g, "");
+      const url = validUrl(raw);
+      if (!url) continue;
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        if (host === "teams.microsoft.com" || host.endsWith(".teams.microsoft.com") ||
+            host === "teams.live.com" || host.endsWith(".teams.live.com") ||
+            host === "teams.cloud.microsoft" || host.endsWith(".teams.cloud.microsoft")) {
+          return url;
+        }
+      } catch (_) {}
+    }
+    return "";
+  }
+
+  function extractTeamsJoinUrl(event) {
+    // Graph's event.onlineMeeting.joinUrl is authoritative when present.
+    // Some external/forwarded Teams invitations arrive with isOnlineMeeting
+    // false and no onlineMeeting object while the join URL remains in the body.
+    for (const candidate of [
+      event?.onlineMeeting?.joinUrl,
+      event?.onlineMeeting?.joinWebUrl,
+      event?.onlineMeetingUrl
+    ]) {
+      const url = validUrl(candidate);
+      if (url) return url;
+    }
+    const textCandidates = [
+      event?.body?.content,
+      event?.bodyPreview,
+      event?.location?.displayName,
+      ...(Array.isArray(event?.locations) ? event.locations.map(location => location?.displayName) : [])
+    ];
+    for (const value of textCandidates) {
+      const url = teamsUrlFromText(value);
+      if (url) return url;
+    }
+    return "";
+  }
+
   function graphEventToNative(event) {
     const attendees = (event?.attendees || []).map(graphAttendeeToNative).filter(Boolean);
-    const joinUrl = cleanString(event?.onlineMeeting?.joinUrl || event?.onlineMeetingUrl);
+    const joinUrl = extractTeamsJoinUrl(event);
     const webLink = cleanString(event?.webLink);
     const isOnlineMeeting = Boolean(event?.isOnlineMeeting || joinUrl);
     // V2.27: a personal Microsoft 365 appointment is still owned by the
@@ -204,12 +271,66 @@
     return payload;
   }
 
-  function responseChangeForUser(newItem, oldItem, userAddress) {
-    const me = cleanAddress(userAddress);
-    if (!me) return "";
-    const findStatus = item => cleanString((item?.attendees || []).find(a => cleanAddress(a?.address) === me)?.status).toUpperCase();
-    const before = findStatus(oldItem);
-    const after = findStatus(newItem);
+  // V2.36: Compare only fields that this add-on can actually write to
+  // Microsoft Graph. Thunderbird changes several local-only properties when
+  // dismissing/snoozing reminders (for example alarm acknowledgement). Those
+  // must never trigger a Graph PATCH or a meeting-update email.
+  function canonicalNativeGraphPayload(item, { includeAttendees = true } = {}) {
+    const payload = nativeItemToGraphPayload(item, { includeAttendees });
+    const categories = Array.isArray(payload.categories)
+      ? [...payload.categories].map(cleanString).sort((a, b) => a.localeCompare(b))
+      : [];
+    const attendees = Array.isArray(payload.attendees)
+      ? [...payload.attendees].map(attendee => ({
+          emailAddress: {
+            address: cleanAddress(attendee?.emailAddress?.address),
+            ...(attendee?.emailAddress?.name ? { name: cleanString(attendee.emailAddress.name) } : {})
+          },
+          type: cleanString(attendee?.type)
+        })).sort((a, b) => {
+          const ak = `${a.emailAddress.address}|${a.type}|${a.emailAddress.name || ""}`;
+          const bk = `${b.emailAddress.address}|${b.type}|${b.emailAddress.name || ""}`;
+          return ak.localeCompare(bk);
+        })
+      : [];
+    return { ...payload, categories, ...(includeAttendees ? { attendees } : {}) };
+  }
+
+  function nativeGraphWriteSignature(item, options = {}) {
+    return JSON.stringify(canonicalNativeGraphPayload(item, options));
+  }
+
+  function nativeGraphRelevantEqual(newItem, oldItem, options = {}) {
+    return nativeGraphWriteSignature(newItem, options) === nativeGraphWriteSignature(oldItem, options);
+  }
+
+  function normalizedUserAddresses(userAddresses) {
+    const values = Array.isArray(userAddresses) ? userAddresses : [userAddresses];
+    return new Set(values.map(cleanAddress).filter(Boolean));
+  }
+
+  function itemResponseForUser(item, userAddresses) {
+    const addresses = normalizedUserAddresses(userAddresses);
+    const normalizePartstat = value => {
+      const raw = cleanString(value);
+      const upper = raw.toUpperCase();
+      if (["ACCEPTED", "TENTATIVE", "DECLINED", "NEEDS-ACTION"].includes(upper)) return upper;
+      return graphResponseToPartstat(raw);
+    };
+    if (addresses.size) {
+      const own = (item?.attendees || []).find(a => addresses.has(cleanAddress(a?.address)))?.status;
+      if (own) return normalizePartstat(own);
+    }
+    return item?.responseStatus ? normalizePartstat(item.responseStatus) : "";
+  }
+
+  function responseActionForUser(item, userAddresses) {
+    return partstatToGraphAction(itemResponseForUser(item, userAddresses));
+  }
+
+  function responseChangeForUser(newItem, oldItem, userAddresses) {
+    const before = itemResponseForUser(oldItem, userAddresses);
+    const after = itemResponseForUser(newItem, userAddresses);
     if (!after || after === before) return "";
     return partstatToGraphAction(after);
   }
@@ -229,8 +350,12 @@
     graphColorToHex,
     graphResponseToPartstat,
     partstatToGraphAction,
+    extractTeamsJoinUrl,
     graphEventToNative,
     nativeItemToGraphPayload,
+    nativeGraphWriteSignature,
+    nativeGraphRelevantEqual,
+    responseActionForUser,
     responseChangeForUser,
     stableRange,
     normalizeGraphDateTime

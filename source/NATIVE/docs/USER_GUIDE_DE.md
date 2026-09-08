@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.33
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -147,3 +147,10 @@ Im Microsoft-365-Space kann zwischen **Monat**, **Woche**, **Tag** und **Agenda*
 
 ### V2.32+ native range diagnostics
 `native_range_queries.json` records the actual `cache.sqlite` range queries using Thunderbird event/occurrence filter masks. It is intended to distinguish “row exists in cache” from “row is returned to the calendar view”.
+## V2.35: Bestätigung ausgehender Termin-Nachrichten
+
+Unter **Microsoft 365 → Einstellungen** ist **Jede ausgehende Termin-Nachricht vor dem Versand durch Microsoft 365 bestätigen** standardmäßig aktiviert. Das Add-on fragt nach, bevor Graph Einladungen, Termin-Updates/-Absagen des Organisators oder RSVP-Antworten versenden kann. Abbrechen beendet den Graph-Vorgang. Normale E-Mails aus dem Thunderbird-Verfassen-Fenster werden nicht abgefangen.
+
+## V2.36: Erinnerung „Verwerfen“ und „Schlummern“ bleiben lokal
+
+Thunderbird ändert beim Verwerfen oder Schlummern einer Erinnerung nur lokale Alarmdaten. V2.36 erkennt diese Änderungen vor jedem Microsoft-Graph-Schreibzugriff. **Verwerfen** und **Schlummern** zeigen daher keine Versandbestätigung und können kein Meeting-Update versenden. Eine echte Änderung des Erinnerungsvorlaufs (z. B. 15 auf 30 Minuten) bleibt dagegen eine Kalenderänderung und wird synchronisiert.

@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.33
+# User Guide – M365 Calendar for Thunderbird V2.36
 
 Build: **GITHUB / NATIVE**
 
@@ -48,7 +48,7 @@ If an error occurs:
 
 The block includes fields such as `build`, `experiment`, `providerRuntime`, `tbCalendars`, `graphCalendars`, `syncCacheItems`, possible `syncError` lines, and a `trace`.
 
-### Diagnostic ZIP for missing native events (V2.33)
+### Diagnostic ZIP for missing native events (V2.34)
 
 Open **Microsoft 365 → ⚙ Settings → Native Thunderbird calendar integration** and use **Calendar diagnostic export**. Choose a range that includes the missing event plus at least one recurring instance before and after it, then select **Create diagnostic ZIP**.
 
@@ -143,3 +143,7 @@ Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address b
 ## Calendar views in the Microsoft 365 Space
 
 Use the buttons above the calendar to switch between **Month**, **Week**, **Day**, and **Agenda**. The selected view is remembered; ‹ / Today / › navigates according to the active view.
+
+## V2.36: reminder Dismiss and Snooze stay local
+
+Thunderbird changes local alarm bookkeeping when a reminder is dismissed or snoozed. V2.36 detects these local-only changes before any Microsoft Graph write. **Dismiss** and **Snooze** therefore do not show the outgoing-message confirmation and cannot send a meeting update. Changing the actual reminder offset (for example 15 to 30 minutes) remains a real calendar change and is synchronized.

@@ -2,8 +2,9 @@
 from pathlib import Path
 import json, re, sys
 ROOT=Path(__file__).resolve().parents[1]
-PUBLIC_IDS={'NATIVE':'m365-calendar-public@35pwr.com','STANDARD':'m365-calendar-standard@35pwr.com'}
+PUBLIC_IDS={'NATIVE':'m365-calendar-for-thunderbird@3-5pe.com','STANDARD':'m365-calendar-standard@3-5pe.com'}
 AUTHOR='Jens Kowalsky, 3-5 Power Electronics GmbH'
+BANNED_DOMAIN = '35pwr' + '.com'
 for variant in ['STANDARD','NATIVE']:
     src=ROOT/'source'/variant
     cfg=(src/'config/build-config.js').read_text(encoding='utf-8')
@@ -19,5 +20,15 @@ for variant in ['STANDARD','NATIVE']:
         sys.exit(1)
     if manifest.get('browser_specific_settings',{}).get('gecko',{}).get('id') != PUBLIC_IDS[variant]:
         print(f'Unexpected add-on ID in {variant}')
+        sys.exit(1)
+for f in ROOT.rglob('*'):
+    if not f.is_file() or '.git' in f.parts or 'release' in f.parts:
+        continue
+    try:
+        text=f.read_text(encoding='utf-8')
+    except (UnicodeDecodeError, OSError):
+        continue
+    if BANNED_DOMAIN.lower() in text.lower():
+        print(f'Obsolete domain reference in {f.relative_to(ROOT)}')
         sys.exit(1)
 print('Neutral public-build check passed.')

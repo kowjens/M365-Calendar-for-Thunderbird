@@ -95,7 +95,7 @@ function populateTimeZoneSelect(value) {
 }
 
 function displayVersion(value) {
-  const raw = String(value || "2.0.33");
+  const raw = String(value || "2.0.36");
   const match = raw.match(/^(\d+)\.0\.(\d+)$/);
   return match ? `V${match[1]}.${Number(match[2])}` : `V${raw}`;
 }
@@ -127,7 +127,7 @@ function updateBuildModeBanner() {
   // states separate prevents a broken NATIVE provider from being mislabeled
   // as a STANDARD build.
   const packagedNative = Boolean(state.auth.nativeMode);
-  const version = displayVersion(state.auth.version || "2.0.33");
+  const version = displayVersion(state.auth.version || "2.0.36");
   els.buildModeBanner.className = `build-mode-banner ${packagedNative ? "native" : "standard"}`;
   if (packagedNative) {
     const apiLabel = state.auth.nativeCapable
@@ -464,6 +464,9 @@ function responseLabel(response) {
 }
 
 function getJoinUrl(event) {
+  if (globalThis.M365_NATIVE?.extractTeamsJoinUrl) {
+    return globalThis.M365_NATIVE.extractTeamsJoinUrl(event);
+  }
   return event?.onlineMeeting?.joinUrl || event?.onlineMeetingUrl || "";
 }
 
@@ -900,6 +903,7 @@ async function openSettings() {
   els.nativeIntegrationCheck.checked = state.config.nativeIntegration !== false;
   els.nativeDaysBeforeInput.value = String(state.config.nativeDaysBefore ?? 90);
   els.nativeDaysAfterInput.value = String(state.config.nativeDaysAfter ?? 365);
+  els.confirmOutgoingMessagesCheck.checked = state.config.confirmOutgoingMessages !== false;
   els.nativeIntegrationBox.classList.remove("hidden");
   await populateAddressBookSelection();
   els.redirectUriInput.value = state.auth.redirectUri || "";
@@ -915,8 +919,8 @@ async function openSettings() {
   // refresh successfully loaded and registered the provider.
   await refreshNativeStatus();
   const distribution = state.auth.preconfigured
-    ? t("buildInfoInternal", displayVersion(state.auth.version || "2.0.33"))
-    : t("buildInfoGithub", displayVersion(state.auth.version || "2.0.33"));
+    ? t("buildInfoInternal", displayVersion(state.auth.version || "2.0.36"))
+    : t("buildInfoGithub", displayVersion(state.auth.version || "2.0.36"));
   const mode = state.auth.nativeMode ? t("nativeBuildTitle") : t("standardBuildTitle");
   const apiState = state.auth.nativeMode
     ? (state.auth.nativeCapable ? t("nativeApiLoaded") : t("nativeApiNotLoaded"))
@@ -937,7 +941,8 @@ async function saveSettings() {
       nativeIntegration: els.nativeIntegrationCheck.checked,
       nativeDaysBefore: els.nativeDaysBeforeInput.value,
       nativeDaysAfter: els.nativeDaysAfterInput.value,
-      contactAddressBookIds: selectedAddressBookIdsFromUi()
+      contactAddressBookIds: selectedAddressBookIdsFromUi(),
+      confirmOutgoingMessages: els.confirmOutgoingMessagesCheck.checked
     }
   });
   state.config = config;
@@ -977,7 +982,7 @@ function renderNativeDiagnostics(status) {
   const diag = status?.diagnostics || {};
   const auto = status?.autoEnsure || {};
   const lines = [
-    `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.33"}`,
+    `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.36"}`,
     `experiment=${status?.available ? "loaded" : "not-loaded"}`,
     `providerRuntime=${diag.providerModuleLoaded ? "loaded" : "not-loaded"}`,
     `providerType=${diag.providerType || "-"}`,
@@ -1232,7 +1237,7 @@ async function refreshNativeStatus() {
     els.nativeSyncBtn.disabled = true;
     els.nativeStatusText.textContent = t("nativeBridgeFailed", error.message || String(error));
     if (els.nativeDebugText) {
-      els.nativeDebugText.textContent = `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.33"}\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
+      els.nativeDebugText.textContent = `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.36"}\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
       if (els.nativeDebugDetails) els.nativeDebugDetails.open = true;
     }
   }

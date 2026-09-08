@@ -333,8 +333,8 @@ function _m365NativeCreateProviderRuntime() {
     return safeString(ownCalendarProperty(calendar, PROP_GRAPH_ID));
   }
 
-  function snapshotCalendarUserPrefs(extension, calendar) {
-    if (!calendar || !isOwnCalendar(calendar, extension)) return false;
+  function snapshotCalendarUserPrefs(extension, calendar, allowSibling = false) {
+    if (!calendar || (!allowSibling && !isOwnCalendar(calendar, extension))) return false;
     const graphId = graphCalendarIdFor(calendar);
     if (!graphId) return false;
     const store = loadNativeUserPrefs(extension);
@@ -532,6 +532,19 @@ function _m365NativeCreateProviderRuntime() {
     }
   }
 
+  function isM365SiblingCalendar(calendar, extension, desiredGraphIds = null) {
+    if (!calendar || isOwnCalendar(calendar, extension)) return false;
+    try {
+      const graphId = safeString(calendar?.getProperty?.(PROP_GRAPH_ID) || rawCalendar(calendar)?.getProperty?.(PROP_GRAPH_ID));
+      if (!graphId) return false;
+      if (desiredGraphIds && !desiredGraphIds.has(graphId)) return false;
+      const uri = safeString(calendar?.uri?.spec || rawCalendar(calendar)?.uri?.spec);
+      return /^https:\/\/graph\.microsoft\.com\/v1\.0\/me\/calendars\//i.test(uri);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function calendarDescriptor(calendar) {
     const raw = rawCalendar(calendar);
     const get = name => {
@@ -547,7 +560,8 @@ function _m365NativeCreateProviderRuntime() {
       visible: get("calendar-main-in-composite") !== false,
       enabled: !Boolean(get("disabled")),
       organizerId: String(get(PROP_ORGANIZER_ID) || ""),
-      organizerName: String(get(PROP_ORGANIZER_NAME) || "")
+      organizerName: String(get(PROP_ORGANIZER_NAME) || ""),
+      identityEmail: String(get("imip.identity")?.email || "")
     };
   }
 
@@ -594,10 +608,25 @@ function _m365NativeCreateProviderRuntime() {
     return safeString(value).replace(/^mailto:/i, "").trim().toLowerCase();
   }
 
+  function calendarSelfAddresses(calendar) {
+    const addresses = new Set();
+    const add = value => {
+      const normalized = normalizeMail(value);
+      if (normalized) addresses.add(normalized);
+    };
+    try { add(calendar?.getProperty?.(PROP_ORGANIZER_ID)); } catch (_) {}
+    try { add(calendar?.getProperty?.("imip.identity")?.email); } catch (_) {}
+    try {
+      const key = safeString(calendar?.getProperty?.("imip.identity.key"));
+      if (key) add(identityForKey(key)?.email);
+    } catch (_) {}
+    return addresses;
+  }
+
   // V2.28 native mapping schema. Graph changeKey does not change when only
   // our Thunderbird-side representation changes, so cache migration must be
   // tracked separately from server content.
-  const NATIVE_MAPPING_VERSION = "2.32-full-cache-readopt";
+  const NATIVE_MAPPING_VERSION = "2.34-itip-teams-links";
 
   function attendeeToPlain(attendee) {
     if (!attendee) return null;
@@ -674,8 +703,58 @@ function _m365NativeCreateProviderRuntime() {
       graphType: safeString(item.getProperty("X-M365-GRAPH-TYPE")),
       seriesMasterId: safeString(item.getProperty("X-M365-SERIES-MASTER-ID")),
       changeKey: safeString(item.getProperty("X-M365-CHANGEKEY")),
-      iCalUId: safeString(item.getProperty("X-M365-ICALUID"))
+      iCalUId: safeString(item.getProperty("X-M365-ICALUID")),
+      nativeUid: safeString(item.id),
+      invitedAttendee: normalizeMail(item.getProperty("X-MOZ-INVITED-ATTENDEE"))
     };
+  }
+
+  // V2.36: Thunderbird mutates local alarm bookkeeping when a reminder is
+  // dismissed or snoozed. None of those bookkeeping fields are part of the
+  // Microsoft Graph event model used by this provider. If the plain remote
+  // representation is unchanged, keep the exact Thunderbird item locally and
+  // do not call the extension/background write handler at all.
+  function plainRemoteOperationSignature(data) {
+    const attendeeRows = (Array.isArray(data?.attendees) ? data.attendees : [])
+      .map(attendee => ({
+        address: normalizeMail(attendee?.address),
+        name: safeString(attendee?.name),
+        role: safeString(attendee?.role),
+        status: safeString(attendee?.status),
+        rsvp: attendee?.rsvp !== false,
+        type: safeString(attendee?.type)
+      }))
+      .sort((a, b) => `${a.address}|${a.role}|${a.type}|${a.name}|${a.status}`.localeCompare(`${b.address}|${b.role}|${b.type}|${b.name}|${b.status}`));
+    const organizer = data?.organizer?.address ? {
+      address: normalizeMail(data.organizer.address),
+      name: safeString(data.organizer.name),
+      role: safeString(data.organizer.role),
+      status: safeString(data.organizer.status),
+      rsvp: data.organizer.rsvp !== false,
+      type: safeString(data.organizer.type)
+    } : null;
+    return JSON.stringify({
+      title: safeString(data?.title),
+      start: safeString(data?.start),
+      end: safeString(data?.end),
+      allDay: Boolean(data?.allDay),
+      location: safeString(data?.location),
+      description: safeString(data?.description),
+      url: safeString(data?.url),
+      status: safeString(data?.status),
+      privacy: safeString(data?.privacy),
+      transparency: safeString(data?.transparency),
+      categories: (Array.isArray(data?.categories) ? data.categories : []).map(safeString).sort(),
+      organizer,
+      attendees: attendeeRows,
+      reminderMinutes: data?.reminderMinutes == null ? null : Number(data.reminderMinutes),
+      isCancelled: Boolean(data?.isCancelled),
+      isOnlineMeeting: Boolean(data?.isOnlineMeeting),
+      isAppointment: Boolean(data?.isAppointment),
+      isOrganizer: Boolean(data?.isOrganizer),
+      responseStatus: safeString(data?.responseStatus),
+      invitedAttendee: normalizeMail(data?.invitedAttendee)
+    });
   }
 
   function addReminder(item, minutes) {
@@ -762,6 +841,14 @@ function _m365NativeCreateProviderRuntime() {
       for (const attendeeData of sourceAttendees) {
         const attendee = plainToAttendee(attendeeData, false);
         if (attendee) item.addAttendee(attendee);
+      }
+      // Thunderbird's iTIP logic needs the concrete invited identity. This
+      // also covers Exchange/EWS identities whose SMTP address differs from
+      // the Microsoft Graph UPN used for the calendar account.
+      const selfAddresses = calendarSelfAddresses(calendar);
+      const invited = sourceAttendees.find(attendeeData => selfAddresses.has(normalizeMail(attendeeData?.address)));
+      if (!data?.isOrganizer && invited?.address) {
+        item.setProperty("X-MOZ-INVITED-ATTENDEE", `mailto:${normalizeMail(invited.address)}`);
       }
     }
     if (data?.reminderMinutes != null) addReminder(item, data.reminderMinutes);
@@ -1346,15 +1433,20 @@ function _m365NativeCreateProviderRuntime() {
 
     isInvitation(item) {
       const organizer = normalizeMail(item?.organizer?.id);
-      const me = normalizeMail(this.getProperty(PROP_ORGANIZER_ID));
-      return Boolean(organizer && me && organizer !== me);
+      const ownAddresses = calendarSelfAddresses(this);
+      return Boolean(organizer && ownAddresses.size && !ownAddresses.has(organizer));
     }
 
     getInvitedAttendee(item) {
-      const me = normalizeMail(this.getProperty(PROP_ORGANIZER_ID));
-      if (!me) return null;
+      const ownAddresses = calendarSelfAddresses(this);
       try {
-        return (item?.getAttendees?.() || []).find(attendee => normalizeMail(attendee.id) === me) || null;
+        const attendees = item?.getAttendees?.() || [];
+        const explicit = normalizeMail(item?.getProperty?.("X-MOZ-INVITED-ATTENDEE"));
+        if (explicit) {
+          const match = attendees.find(attendee => normalizeMail(attendee.id) === explicit);
+          if (match) return match;
+        }
+        return attendees.find(attendee => ownAddresses.has(normalizeMail(attendee.id))) || null;
       } catch (_) {
         return null;
       }
@@ -1433,6 +1525,18 @@ function _m365NativeCreateProviderRuntime() {
         const result = firstUsefulResult(results);
         if (!result?.id) throw new Error("Microsoft 365 did not return the created event");
         const item = plainToItem(result, this);
+        if (result?.nativeOperation === "rsvp-existing" && item?.id) {
+          // CalCachedCalendar's ADD callback inserts the returned provider item.
+          // Email iTIP can enter through add/adopt although the Graph event is
+          // already cached, so remove that row first and let the callback add
+          // the updated server item under the authoritative Graph ID.
+          try {
+            const existing = await this.offlineStorage.getItem(item.id);
+            if (existing) await this.offlineStorage.deleteItem(existing);
+          } catch (error) {
+            console.warn("M365 native: could not prepare cached RSVP replacement", error);
+          }
+        }
         if (cachedCallback) {
           await cachedCallback(
             this.superCalendar,
@@ -1455,16 +1559,38 @@ function _m365NativeCreateProviderRuntime() {
       const cachedCallback = this._cachedModifyItemCallback;
       const options = operationOptions(suppliedOptions);
       try {
+        const newPlain = itemToPlain(newItem);
+        const oldPlain = itemToPlain(oldItem);
+
+        // V2.36 local-only fast path. Dismiss/snooze changes alarm bookkeeping
+        // on the Thunderbird item but not the remote event representation. Keep
+        // the exact new Thunderbird item so alarmLastAck/snooze properties are
+        // preserved in cache, and bypass Graph + outgoing-message confirmation.
+        // iTIP invitation operations intentionally stay on the guarded RSVP path.
+        if (!options?.invitation && plainRemoteOperationSignature(newPlain) === plainRemoteOperationSignature(oldPlain)) {
+          if (cachedCallback) {
+            await cachedCallback(
+              this.superCalendar,
+              Cr.NS_OK,
+              Ci.calIOperationListener.MODIFY,
+              newItem.id,
+              newItem
+            );
+          }
+          this.observers.notify("onModifyItem", [newItem, oldItem]);
+          return newItem;
+        }
+
         const results = await this.extension.emit(
           "nativeCalendar.onItemUpdated",
           calendarDescriptor(this),
-          itemToPlain(newItem),
-          itemToPlain(oldItem),
+          newPlain,
+          oldPlain,
           options
         );
         const result = firstUsefulResult(results);
         if (!result?.id) throw new Error("Microsoft 365 did not return the updated event");
-        const item = plainToItem(result, this);
+        const item = result?.nativeOperation === "local-only" ? newItem : plainToItem(result, this);
         if (cachedCallback) {
           await cachedCallback(
             this.superCalendar,
@@ -2050,6 +2176,24 @@ function _m365NativeCreateProviderRuntime() {
 
       const type = providerType(extension);
       const desired = new Map((descriptors || []).map(item => [String(item.graphCalendarId), item]));
+      const desiredGraphIds = new Set(desired.keys());
+
+      // V2.34 changes the add-on identity before first ATN publication. Existing
+      // native calendar registry rows therefore belong to a sibling provider
+      // type. Recognize them by our Graph calendar metadata/URI, preserve their
+      // Thunderbird UI preferences, then recreate them under the new provider.
+      // No previous add-on ID/domain needs to be hard-coded here.
+      const siblingCalendars = stageSync("enumerateSiblingCalendars", () =>
+        cal.manager.getCalendars().filter(calendar => isM365SiblingCalendar(calendar, extension, desiredGraphIds))
+      );
+      for (const calendar of siblingCalendars) {
+        const graphId = safeString(calendar.getProperty(PROP_GRAPH_ID));
+        stageSync(`migrateSiblingCalendar:${graphId || calendar.id}`, () => {
+          snapshotCalendarUserPrefs(extension, calendar, true);
+          cal.manager.unregisterCalendar(calendar);
+        });
+      }
+
       const existing = stageSync("enumerateExistingCalendars", () =>
         cal.manager.getCalendars().filter(calendar => isOwnCalendar(calendar, extension))
       );
@@ -2682,7 +2826,7 @@ function _m365NativeCreateProviderRuntime() {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.33//EN",
+      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.36//EN",
       "CALSCALE:GREGORIAN",
       `X-WR-CALNAME:${safeString(calendar?.name || "Microsoft 365").replace(/[\\;,\r\n]/g, " ")}`,
       ...eventBlocks,
