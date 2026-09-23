@@ -9,7 +9,6 @@ const bg = fs.readFileSync(path.join(root, "background.js"), "utf8");
 const ui = fs.readFileSync(path.join(root, "calendar/calendar.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "calendar/calendar.html"), "utf8");
 
-assert.strictEqual(manifest.version, "2.0.39");
 assert.ok(bg.includes('"Calendars.ReadWrite.Shared"'), "shared calendar scope missing");
 for (const fn of ["updateEvent", "deleteEvent", "getSchedule", "buildGraphEventPayload"]) {
   assert.ok(bg.includes(`function ${fn}`) || bg.includes(`async function ${fn}`), `missing ${fn}`);

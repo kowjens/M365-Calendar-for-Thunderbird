@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INCLUDE = ["manifest.json", "background.js", "calendar", "invite", "confirm", "options", "lib", "config", "_locales", "icons"]
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 ATN_STRICT_MAX_VERSION = "156.*"
+REPOSITORY_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def display_version(semver):
@@ -40,6 +41,10 @@ def build(variant, atn=False):
     src = ROOT / "source" / variant
     items = INCLUDE + (["experiments"] if variant == "NATIVE" else [])
     manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("version") != REPOSITORY_VERSION:
+        raise SystemExit(
+            f"{variant} manifest version {manifest.get('version')!r} does not match VERSION {REPOSITORY_VERSION!r}"
+        )
     packaged_manifest = copy.deepcopy(manifest)
     suffix = variant
     if atn:

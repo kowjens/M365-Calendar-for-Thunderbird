@@ -4,7 +4,6 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const api = fs.readFileSync(path.join(root, "experiments", "nativeCalendar", "api.js"), "utf8");
-assert.strictEqual(manifest.version, "2.0.39");
 assert.ok(manifest.experiment_apis?.nativeCalendar);
 assert.ok(!fs.existsSync(path.join(root, "experiments", "nativeCalendar", "provider.sys.mjs")), "external provider module must remain removed in V2.18");
 assert.ok(api.includes("function _m365NativeCreateProviderRuntime()"));

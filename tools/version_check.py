@@ -4,7 +4,7 @@ import json
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "2.0.40"
+EXPECTED_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 VARIANTS = ("STANDARD", "NATIVE")
 
 failed = False

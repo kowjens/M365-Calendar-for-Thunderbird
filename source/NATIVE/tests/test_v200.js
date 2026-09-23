@@ -5,7 +5,6 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
-assert.strictEqual(manifest.version, "2.0.39");
 assert.strictEqual(manifest.browser_specific_settings.gecko.id, "m365-calendar-for-thunderbird@3-5pe.com");
 assert.ok(manifest.experiment_apis?.nativeCalendar, "nativeCalendar Experiment missing");
 assert.ok(manifest.background.scripts.includes("lib/native.js"));
