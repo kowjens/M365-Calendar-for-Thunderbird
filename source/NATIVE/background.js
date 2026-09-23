@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "2.0.36";
+const VERSION = "2.0.39";
 const CONFIG_SCHEMA_VERSION = 206;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
@@ -2391,37 +2391,46 @@ async function nativeCreateHandler(calendar, item, options = {}) {
 
   const ownAddresses = [...new Set([
     ...nativeCalendarAddresses(calendar),
-    M365_NATIVE.cleanAddress(item?.invitedAttendee)
+    M365_NATIVE.cleanAddress(item?.invitedAttendee),
+    M365_NATIVE.cleanAddress(options?.invitedAttendee)
   ].filter(Boolean))];
-  const responseAction = M365_NATIVE.responseActionForUser(item, ownAddresses);
   const organizer = M365_NATIVE.cleanAddress(item?.organizer?.address);
   const isExternalOrganizer = Boolean(organizer && !ownAddresses.includes(organizer));
   const isInvitationOperation = Boolean(options?.invitation || isExternalOrganizer);
 
-  // V2.34: Thunderbird can route an email iTIP response through add/adoptItem.
-  // Never POST that item as a new Graph event: doing so turns the attendee into
-  // an organizer and sends a new meeting request to the participants.
+  // V2.34/V2.38: Thunderbird can route an email iTIP response through
+  // add/adoptItem even though Exchange already owns the event. Never POST that
+  // item as a new Graph event: doing so turns the attendee into an organizer
+  // and sends a new meeting request to the participants.
   if (isInvitationOperation) {
-    if (!responseAction) {
-      throw new Error("Invitation operation has no attendee response state; no new meeting was created.");
-    }
-    const match = await findEventForInvitation(nativePlainItemAsInvitation(item));
+    const invitation = nativePlainItemAsInvitation(item);
+    const match = await findEventForInvitationWithRetry(invitation, {
+      cachedGraphEventId: String(options?.cachedGraphEventId || ""),
+      calendarId: calendar.graphCalendarId
+    });
     if (!match?.event?.id) {
-      throw new Error("Could not match the invitation to an existing Microsoft 365 event; no new meeting was created.");
+      throw new Error("Could not match the invitation to the Exchange calendar event after synchronization retries; no message was sent and no new meeting was created.");
     }
     if (match.event.isOrganizer) {
       throw new Error("The matched Microsoft 365 event belongs to the organizer and cannot be answered as an invitation.");
     }
+
+    // Prefer the PARTSTAT captured directly from Thunderbird's invited
+    // attendee object. itemToPlain() remains the fallback for older builds.
+    const responseAction =
+      M365_NATIVE.partstatToGraphAction(options?.invitationResponseStatus) ||
+      M365_NATIVE.responseActionForUser(item, ownAddresses);
+    if (!responseAction) {
+      throw new Error("Invitation operation has no Accept/Tentative/Decline attendee state; no message was sent and no new meeting was created.");
+    }
+
     await respondEvent({
       eventId: match.event.id,
       response: responseAction,
       comment: "",
       sendResponse: true
     });
-    await invalidateAfterNativeWrite(calendar.graphCalendarId);
-    const updated = await getGraphEventForNative(match.event.id, calendar.graphCalendarId);
-    const complete = updated?.id ? updated : match.event;
-    if (complete?.id) rememberNativeUpsert(calendar.graphCalendarId, complete);
+    const complete = await finalizeNativeInvitationResponse(calendar, match, responseAction, ownAddresses);
     return { ...M365_NATIVE.graphEventToNative(complete), nativeOperation: "rsvp-existing" };
   }
 
@@ -2468,9 +2477,25 @@ async function nativeUpdateHandler(calendar, item, oldItem, options = {}) {
       comment: "",
       sendResponse: true
     });
-    await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
-    const updated = await getGraphEventForNative(item.id, calendar?.graphCalendarId || "");
-    if (calendar?.graphCalendarId && updated?.id) rememberNativeUpsert(calendar.graphCalendarId, updated);
+    const match = {
+      event: {
+        id: item.id,
+        subject: oldItem?.title || item?.title || "",
+        start: oldItem?.start ? { dateTime: oldItem.start, timeZone: "UTC" } : undefined,
+        end: oldItem?.end ? { dateTime: oldItem.end, timeZone: "UTC" } : undefined,
+        organizer: oldItem?.organizer?.address ? { emailAddress: { address: oldItem.organizer.address, name: oldItem.organizer.name || "" } } : undefined,
+        attendees: (oldItem?.attendees || item?.attendees || []).map(attendee => ({
+          emailAddress: { address: attendee.address || "", name: attendee.name || "" },
+          type: "required",
+          status: { response: String(attendee.status || "notResponded") }
+        })),
+        responseStatus: { response: item?.responseStatus || "notResponded" },
+        iCalUId: item?.iCalUId || oldItem?.iCalUId || "",
+        isOrganizer: false,
+        isCancelled: false
+      }
+    };
+    const updated = await finalizeNativeInvitationResponse(calendar, match, responseAction, ownAddresses);
     return M365_NATIVE.graphEventToNative(updated);
   }
 
@@ -2741,6 +2766,90 @@ async function findEventForInvitation(invitation) {
 
   // Newer Graph schemas also expose uid, which is useful for recurring series.
   return tryFilteredInvitationLookup("uid", invitation);
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+async function findEventForInvitationWithRetry(invitation, { cachedGraphEventId = "", calendarId = "" } = {}) {
+  // V2.38: Prefer the exact Graph id already present in Thunderbird's native
+  // cache. This avoids the classic iTIP race where the meeting request reaches
+  // the mailbox before a calendarView search can see Exchange's tentative event.
+  if (cachedGraphEventId) {
+    try {
+      const cachedEvent = await getGraphEventForNative(cachedGraphEventId, calendarId);
+      const verified = chooseBestInvitationEvent([cachedEvent], invitation, "native-cache-id");
+      if (verified) return verified;
+    } catch (error) {
+      console.debug("Cached invitation Graph id could not be re-read; falling back to lookup", error?.message || error);
+    }
+  }
+
+  // Exchange normally creates a tentative event when the meeting request is
+  // delivered, but Graph/calendarView can briefly lag behind the mail item.
+  // Retry for a few seconds before treating the invitation as unmatched.
+  const waits = [0, 400, 900, 1700, 3000];
+  let lastError = null;
+  for (let attempt = 0; attempt < waits.length; attempt += 1) {
+    if (waits[attempt]) await delay(waits[attempt]);
+    try {
+      const match = await findEventForInvitation(invitation);
+      if (match) return { ...match, attempts: attempt + 1 };
+    } catch (error) {
+      lastError = error;
+      console.debug(`Invitation lookup attempt ${attempt + 1} failed`, error?.message || error);
+    }
+  }
+  if (lastError) console.warn("Invitation lookup exhausted retries", lastError);
+  return null;
+}
+
+function graphResponseValueForAction(action) {
+  if (action === "accept") return "accepted";
+  if (action === "tentativelyAccept") return "tentativelyAccepted";
+  if (action === "decline") return "declined";
+  return "notResponded";
+}
+
+function eventWithLocalResponse(event, ownAddresses, action) {
+  const response = graphResponseValueForAction(action);
+  const addresses = new Set((ownAddresses || []).map(M365_NATIVE.cleanAddress).filter(Boolean));
+  const copy = event ? JSON.parse(JSON.stringify(event)) : {};
+  copy.responseStatus = { ...(copy.responseStatus || {}), response };
+  if (Array.isArray(copy.attendees) && addresses.size) {
+    copy.attendees = copy.attendees.map(attendee => {
+      const address = M365_NATIVE.cleanAddress(attendee?.emailAddress?.address);
+      if (!addresses.has(address)) return attendee;
+      return { ...attendee, status: { ...(attendee.status || {}), response } };
+    });
+  }
+  return copy;
+}
+
+async function finalizeNativeInvitationResponse(calendar, match, responseAction, ownAddresses) {
+  // Once Graph accepted the RSVP POST, the operation is committed. Any
+  // immediate readback/cache invalidation failure must not be surfaced to
+  // Thunderbird as NS_ERROR_FAILURE, otherwise the user sees 80004005 and may
+  // retry an RSVP that was already sent.
+  let complete = eventWithLocalResponse(match?.event || {}, ownAddresses, responseAction);
+  try {
+    await invalidateAfterNativeWrite(calendar?.graphCalendarId || "");
+  } catch (error) {
+    console.warn("RSVP succeeded but sync-cache invalidation failed", error);
+  }
+  try {
+    const updated = await getGraphEventForNative(match.event.id, calendar?.graphCalendarId || "");
+    if (updated?.id) complete = updated;
+  } catch (error) {
+    console.warn("RSVP succeeded but immediate Graph readback failed; returning reconciled event", error);
+  }
+  try {
+    if (calendar?.graphCalendarId && complete?.id) rememberNativeUpsert(calendar.graphCalendarId, complete);
+  } catch (error) {
+    console.warn("RSVP succeeded but native write guard could not be updated", error);
+  }
+  return complete;
 }
 
 function safeInvitation(invitation) {

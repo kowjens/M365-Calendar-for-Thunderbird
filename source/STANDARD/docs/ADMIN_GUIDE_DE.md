@@ -1,4 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.36
+# Administratoranleitung – M365 Calendar for Thunderbird V2.39
 
 Build: **GITHUB / STANDARD**
 

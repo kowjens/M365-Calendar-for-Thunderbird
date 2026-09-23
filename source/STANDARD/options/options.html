@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>M365 Calendar for Thunderbird - Settings & Diagnostics</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="../icons/m365-64.svg" alt="" width="48" height="48">
+      <div><h1>M365 Calendar for Thunderbird</h1><p>Settings & diagnostics</p></div>
+    </header>
+
+    <section class="card">
+      <h2>Compatibility status</h2>
+      <div class="grid status-grid">
+        <span>Thunderbird</span><strong id="tbVersion">...</strong>
+        <span>Add-on</span><strong id="addonVersion">...</strong>
+        <span>Background</span><strong id="backgroundState">checking...</strong>
+        <span>Native Experiment</span><strong id="experimentState">checking...</strong>
+        <span>Native provider</span><strong id="providerState">checking...</strong>
+      </div>
+      <p id="compatWarning" class="warning hidden"></p>
+    </section>
+
+    <section class="card">
+      <h2>Microsoft Entra / synchronization</h2>
+      <div class="form-grid">
+        <label>Application (Client) ID<input id="clientId" type="text" autocomplete="off"></label>
+        <label>Tenant<input id="tenant" type="text" autocomplete="off"></label>
+        <label>Exchange time zone<input id="timeZone" type="text"></label>
+        <label>Automatic sync (minutes)<input id="autoSyncMinutes" type="number" min="0" max="60"></label>
+        <label class="check"><input id="nativeIntegration" type="checkbox"> Enable native Thunderbird calendar integration</label>
+        <label class="check"><input id="confirmOutgoingMessages" type="checkbox"> Confirm outgoing meeting messages</label>
+      </div>
+      <label>OAuth redirect URI<div class="copy-row"><input id="redirectUri" type="text" readonly><button id="copyRedirect" type="button">Copy</button></div></label>
+      <div class="actions"><button id="save" type="button" class="primary">Save settings</button><button id="login" type="button">Microsoft login</button><button id="logout" type="button">Logout</button></div>
+      <p id="saveStatus" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <h2>Native calendar recovery</h2>
+      <div class="actions"><button id="activateNative" type="button">Activate / register native calendars</button><button id="syncNative" type="button">Synchronize now</button><button id="openSpace" type="button">Open M365 Space</button></div>
+      <p class="muted">These controls are intentionally independent of the M365 Space UI.</p>
+    </section>
+
+    <section class="card">
+      <h2>Diagnostics</h2>
+      <div class="actions"><button id="refreshDiagnostics" type="button" class="primary">Refresh diagnostics</button><button id="copyDiagnostics" type="button">Copy diagnostics</button></div>
+      <pre id="diagnostics">Loading...</pre>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,5 +1,33 @@
 # Changelog
 
+## V2.39 (2026-09-23)
+
+- Adopted an ESR-first compatibility policy while continuing to support Thunderbird Monthly releases.
+- Removed `strict_max_version` from GitHub and INTERNAL NATIVE manifests so new Monthly majors are not blocked solely by the manifest.
+- Kept STANDARD builds uncapped.
+- Added a separate deterministic ATN NATIVE build that injects `strict_max_version: 156.*`, satisfying the current Experiment-submission requirement without imposing that ceiling on GitHub/internal packages.
+- Added `docs/COMPATIBILITY.md`, README guidance and a GitHub bug-report field for Thunderbird channel (ESR / Monthly / Beta).
+- Generalized the standalone Options compatibility warning so it reports any packaged maximum that is lower than the running Thunderbird version.
+- Retained all V2.34–V2.38 calendar safety, Teams, RSVP and diagnostics behavior unchanged.
+
+## V2.38 (2026-09-23)
+
+- Added explicit Thunderbird 156 compatibility for the NATIVE build (`strict_max_version: 156.*`).
+- Added a standalone **Settings & diagnostics** page accessible from Thunderbird Add-ons Manager, independent of the M365 Space UI.
+- The fallback page reports Thunderbird/add-on versions, background responsiveness, Experiment ping and native-provider status, and provides native activation/sync controls.
+- Added direct storage fallback for basic configuration when the background page is unavailable, so diagnostics and recovery remain reachable.
+- Included the standalone options page in all XPI builds and ATN/source packages.
+- Added V2.38 regression coverage for TB 156 manifest compatibility and fallback options.
+
+## V2.37
+
+- Fixed Thunderbird email-iTIP Accept/Tentative/Decline operations that could end in generic `0x80004005 / NS_ERROR_FAILURE` while reconciling the associated Exchange calendar event.
+- Native provider now captures the selected invited-attendee PARTSTAT directly from Thunderbird and passes it to the RSVP handler.
+- Added cache-assisted invitation reconciliation using the authoritative Graph event ID when the Exchange event is already present in Thunderbird's native cache.
+- Added a bounded retry window for Graph event lookup to tolerate the short delay between receipt of a meeting request and visibility of the automatically created calendar event.
+- Once Graph accepts the RSVP action, cache invalidation/readback failures are non-fatal so Thunderbird does not report a failed operation after a successful response.
+- Invitation handling remains fail-closed: unresolved invitations never fall through to generic `POST /events` creation.
+
 ## V2.36
 
 - Fixed Thunderbird reminder **Dismiss/Snooze** being misclassified as an organizer meeting edit.
@@ -17,15 +45,50 @@
 
 ## V2.34
 
-- Recover Teams join links from event body/location when external invitations omit Graph `onlineMeeting.joinUrl`.
-- NATIVE: handle Thunderbird/EWS email iTIP RSVP through Graph response actions and never create a new event for an invitation response.
-- NATIVE: add mail-identity-aware invited-attendee metadata and one-time cache re-adoption.
-- Final public IDs use the `3-5pe.com` domain.
+- Fixed missing **Join meeting** actions for external Teams invitations where Exchange/Graph keeps the Teams URL only in the event body/location instead of `onlineMeeting.joinUrl`.
+- Added a fail-closed native email-iTIP RSVP path: Accept/Tentative/Decline through Thunderbird/EWS is matched to the existing Graph event and uses the dedicated Graph response action instead of creating a new meeting.
+- Added native mail-identity awareness and `X-MOZ-INVITED-ATTENDEE` metadata for Thunderbird scheduling.
+- Bumped the native mapping schema to `2.34-itip-teams-links` for a one-time re-adoption of cached items.
+- Finalized the public NATIVE ID as `m365-calendar-for-thunderbird@3-5pe.com`; public STANDARD uses `m365-calendar-standard@3-5pe.com`.
+- Retained the diagnosed Thunderbird Multiweek rendering issue as a host-UI known issue rather than applying a destructive synchronization workaround.
+
+## V2.33
+
+- ATN/publication readiness release; synchronization behavior remains based on V2.32.
+
+- Stable public NATIVE/STANDARD add-on IDs replace the temporary `.invalid` ID.
+
+- Added `sensitiveDataUpload`, NATIVE `strict_max_version: 154.*`, deterministic builds and ATN preflight validation.
+
+- Updated GitHub Actions and corrected the public author/branding regression test.
+
+- Documented the Thunderbird Multiweek rendering symptom confirmed by V2.32 native range diagnostics.
+
 
 ## V2.32
-- Full one-time native cache re-adoption for all M365 event kinds.
-- Diagnostic export captures storage range-query results and filter masks.
 
+- Added a read-only **calendar diagnostic ZIP export** for NATIVE builds with a selectable date range.
+- Export captures the raw Graph `calendarView`, the hydrated M365 Space snapshot, matching Space cache windows, the actual Thunderbird native provider cache, a native ICS representation, provider diagnostics and auth state without OAuth tokens.
+- Added automatic Graph-vs-native comparison (`comparison.csv/json`) plus recurring-series grouping (`series_comparison.json`) to identify isolated missing occurrences/exceptions.
+- Diagnostic collection deliberately does **not** trigger native synchronization, preserving the failing cache state.
+- Increment technical version to `2.0.32` / visible version `V2.32`.
+
+## V2.30
+
+- Force a one-time native delete/re-adopt migration for every non-online event, including ordinary meetings with attendees.
+- Add `syncCacheOtherMeetings` diagnostics and propagate direct-push repair counters.
+- Add the signed-in organizer as a required attendee when creating Teams events in the M365 Space.
+- Isolate native RSVP actions from generic event updates so Accept/Tentative/Decline only sends the Graph response to the organizer.
+- Increment technical version to `2.0.30` / visible version `V2.30`.
+
+## V2.29
+
+- Added **Month / Week / Day / Agenda** views to the Microsoft 365 Space and persisted the chosen view.
+- Changed non-online native mapping migration from `modifyItem()` to a one-time **delete + adopt** lifecycle so Thunderbird's active native calendar view receives complete per-item observer notifications.
+- Removed storage batching around provider-replay reconciliation for mapping repairs.
+- Added `syncCacheVisibilityRepairs` diagnostics.
+- Standardized visible version labels to **V2.29** while retaining technical manifest version `2.0.29`.
+- Updated author metadata to **Jens Kowalsky, 3-5 Power Electronics GmbH**.
 
 ## V2.28
 

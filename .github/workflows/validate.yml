@@ -28,3 +28,4 @@ jobs:
           python tools/atn_check.py
       - name: Build public XPIs
         run: python tools/build_xpi.py --all
+          python tools/build_xpi.py --atn

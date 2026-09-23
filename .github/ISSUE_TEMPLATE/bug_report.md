@@ -22,3 +22,8 @@ labels: bug
 
 ## Diagnostics
 For NATIVE calendar issues, paste the complete **Native diagnostics** block from Microsoft 365 → gear icon → settings. Remove personal event/contact content before posting.
+
+- Thunderbird channel: ESR / Monthly / Beta
+- Thunderbird version:
+- Add-on edition: NATIVE / STANDARD
+- Add-on version:

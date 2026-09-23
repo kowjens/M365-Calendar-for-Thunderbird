@@ -16,17 +16,31 @@ python tools/neutrality_check.py
 python tools/atn_check.py
 ```
 
-## Build
+## Build GitHub / general-use XPIs
 
 ```bash
 python tools/build_xpi.py --all
 ```
 
-The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. This makes reviewer/source reproduction easier.
-
 Outputs:
 
-- `release/M365_Thunderbird_Calendar_V2.36_NATIVE.xpi`
-- `release/M365_Thunderbird_Calendar_V2.36_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.39_NATIVE.xpi`
+- `release/M365_Thunderbird_Calendar_V2.39_STANDARD.xpi`
 
-The NATIVE XPI is the package intended for addons.thunderbird.net. It contains the Thunderbird Experiment API needed for native Calendar integration.
+The GitHub NATIVE package deliberately has **no `strict_max_version`**. ESR is recommended for production, but normal Thunderbird Monthly releases are not blocked by an artificial manifest ceiling.
+
+## Build the ATN NATIVE XPI
+
+```bash
+python tools/build_xpi.py --atn
+```
+
+Output:
+
+- `release/M365_Thunderbird_Calendar_V2.39_ATN_NATIVE.xpi`
+
+The ATN package is built from the same NATIVE source, but the build injects `strict_max_version: 156.*` into the packaged manifest because current Thunderbird Experiment review/linting requires a maximum version. The source manifest itself remains uncapped so GitHub and internal/test deployments continue to work on newer Monthly releases for compatibility testing.
+
+The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. This makes reviewer/source reproduction easier.
+
+See `docs/COMPATIBILITY.md` for the release-channel policy.

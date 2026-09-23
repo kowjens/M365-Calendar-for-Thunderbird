@@ -1,5 +1,33 @@
 # Changelog
 
+## V2.39 (2026-09-23)
+
+- Adopted an ESR-first compatibility policy while continuing to support Thunderbird Monthly releases.
+- Removed `strict_max_version` from GitHub and INTERNAL NATIVE manifests so new Monthly majors are not blocked solely by the manifest.
+- Kept STANDARD builds uncapped.
+- Added a separate deterministic ATN NATIVE build that injects `strict_max_version: 156.*`, satisfying the current Experiment-submission requirement without imposing that ceiling on GitHub/internal packages.
+- Added `docs/COMPATIBILITY.md`, README guidance and a GitHub bug-report field for Thunderbird channel (ESR / Monthly / Beta).
+- Generalized the standalone Options compatibility warning so it reports any packaged maximum that is lower than the running Thunderbird version.
+- Retained all V2.34–V2.38 calendar safety, Teams, RSVP and diagnostics behavior unchanged.
+
+## V2.38 (2026-09-23)
+
+- Added explicit Thunderbird 156 compatibility for the NATIVE build (`strict_max_version: 156.*`).
+- Added a standalone **Settings & diagnostics** page accessible from Thunderbird Add-ons Manager, independent of the M365 Space UI.
+- The fallback page reports Thunderbird/add-on versions, background responsiveness, Experiment ping and native-provider status, and provides native activation/sync controls.
+- Added direct storage fallback for basic configuration when the background page is unavailable, so diagnostics and recovery remain reachable.
+- Included the standalone options page in all XPI builds and ATN/source packages.
+- Added V2.38 regression coverage for TB 156 manifest compatibility and fallback options.
+
+## V2.37
+
+- Fixed Thunderbird email-iTIP Accept/Tentative/Decline operations that could end in generic `0x80004005 / NS_ERROR_FAILURE` while reconciling the associated Exchange calendar event.
+- Native provider now captures the selected invited-attendee PARTSTAT directly from Thunderbird and passes it to the RSVP handler.
+- Added cache-assisted invitation reconciliation using the authoritative Graph event ID when the Exchange event is already present in Thunderbird's native cache.
+- Added a bounded retry window for Graph event lookup to tolerate the short delay between receipt of a meeting request and visibility of the automatically created calendar event.
+- Once Graph accepts the RSVP action, cache invalidation/readback failures are non-fatal so Thunderbird does not report a failed operation after a successful response.
+- Invitation handling remains fail-closed: unresolved invitations never fall through to generic `POST /events` creation.
+
 ## V2.36
 
 - Fixed Thunderbird reminder **Dismiss/Snooze** being misclassified as an organizer meeting edit.

@@ -12,7 +12,9 @@ const create = bg.slice(start,end);
 assert.ok(create.includes("options = {}"));
 assert.ok(create.includes("isInvitationOperation"));
 assert.ok(create.includes("options?.invitation || isExternalOrganizer"), "external-organizer adopts must never fall through to Graph event creation");
-assert.ok(create.includes("findEventForInvitation(nativePlainItemAsInvitation(item))"));
+assert.ok(create.includes("findEventForInvitationWithRetry(nativePlainItemAsInvitation(item)" ) || create.includes("findEventForInvitationWithRetry(invitation"), "email iTIP must reconcile against an existing Graph event with retry");
+assert.ok(create.includes("cachedGraphEventId"), "native cache event id must be used as an invitation reconciliation hint");
+assert.ok(create.includes("invitationResponseStatus"), "PARTSTAT captured by Thunderbird must be preferred");
 assert.ok(create.includes("response: responseAction"));
 assert.ok(create.includes("sendResponse: true"));
 assert.ok(create.includes('nativeOperation: "rsvp-existing"'));
@@ -22,6 +24,9 @@ assert.ok(invitationPos >= 0 && graphCreatePos > invitationPos, "RSVP branch mus
 assert.ok(create.slice(invitationPos, graphCreatePos).includes("no new meeting was created"), "unmatched iTIP must fail closed");
 
 assert.ok(api.includes('options.invitation = true'));
+assert.ok(api.includes('options.invitationResponseStatus'));
+assert.ok(api.includes('cachedInvitationHint(this, inputItem)'));
+assert.ok(api.includes('options.cachedGraphEventId'));
 assert.ok(api.includes('identityEmail: String(get("imip.identity")?.email || "")'));
 assert.ok(api.includes('X-MOZ-INVITED-ATTENDEE'));
 assert.ok(api.includes('result?.nativeOperation === "rsvp-existing"'));
@@ -30,4 +35,4 @@ assert.ok(api.includes('await this.offlineStorage.deleteItem(existing)'));
 assert.strictEqual(native.responseActionForUser({attendees:[{address:"ews@example.com",status:"ACCEPTED"}]}, ["graph@example.com","ews@example.com"]), "accept");
 assert.strictEqual(native.responseActionForUser({attendees:[{address:"ews@example.com",status:"TENTATIVE"}]}, ["graph@example.com","ews@example.com"]), "tentativelyAccept");
 assert.strictEqual(native.responseActionForUser({attendees:[{address:"ews@example.com",status:"DECLINED"}]}, ["graph@example.com","ews@example.com"]), "decline");
-console.log("V2.34 native email iTIP RSVP isolation passed");
+console.log("V2.34/V2.38 native email iTIP RSVP isolation passed");

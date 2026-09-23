@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "2.0.36",
+  "version": "2.0.39",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "default_locale": "de",
   "browser_specific_settings": {
@@ -43,5 +43,9 @@
       "32": "icons/m365-32.svg"
     }
   },
-  "homepage_url": "https://github.com/kowjens/M365-Calendar-for-Thunderbird"
+  "homepage_url": "https://github.com/kowjens/M365-Calendar-for-Thunderbird",
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  }
 }

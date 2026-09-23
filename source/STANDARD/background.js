@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "2.0.36";
+const VERSION = "2.0.39";
 const CONFIG_SCHEMA_VERSION = 206;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";

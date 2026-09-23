@@ -866,6 +866,37 @@ function _m365NativeCreateProviderRuntime() {
     return options;
   }
 
+  function normalizedInvitationUid(value) {
+    return safeString(value).trim().toLowerCase();
+  }
+
+  async function cachedInvitationHint(calendar, inputItem) {
+    const wanted = new Set([
+      normalizedInvitationUid(inputItem?.id),
+      normalizedInvitationUid(inputItem?.getProperty?.("X-M365-ICALUID")),
+    ].filter(Boolean));
+    if (!wanted.size || !calendar?.offlineStorage?.getItems) return null;
+
+    const filter = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
+    try {
+      for await (const items of cal.iterate.streamValues(calendar.offlineStorage.getItems(filter, 0, null, null))) {
+        for (const candidate of items || []) {
+          const candidateIcalUid = normalizedInvitationUid(candidate?.getProperty?.("X-M365-ICALUID"));
+          const candidateId = normalizedInvitationUid(candidate?.id);
+          if ((candidateIcalUid && wanted.has(candidateIcalUid)) || (candidateId && wanted.has(candidateId))) {
+            return {
+              graphEventId: safeString(candidate.id),
+              iCalUId: safeString(candidate?.getProperty?.("X-M365-ICALUID")),
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("M365 native: could not inspect cache for invitation reconciliation", error);
+    }
+    return null;
+  }
+
   function firstUsefulResult(results) {
     for (const result of results || []) {
       if (result !== undefined && result !== null) return result;
@@ -1516,6 +1547,33 @@ function _m365NativeCreateProviderRuntime() {
       const cachedCallback = this._cachedAdoptItemCallback;
       const options = operationOptions();
       try {
+        // V2.38 invitation reconciliation. Thunderbird's iTIP processor may
+        // invoke add/adopt for a meeting request even though Exchange has
+        // already created the tentative server event. Preserve the selected
+        // PARTSTAT explicitly and, when possible, hand the background the
+        // authoritative Graph event id already present in Thunderbird's cache.
+        const providerInvitation = Boolean(options.invitation || this.isInvitation(inputItem));
+        if (providerInvitation) {
+          // Stack inspection is useful for Thunderbird iTIP, but an externally
+          // organized item is itself authoritative evidence that this is an
+          // invitation. Mark it explicitly so the background can never fall
+          // through to generic event creation if Thunderbird changes its
+          // internal call stack.
+          options.invitation = true;
+          try {
+            const invited = this.getInvitedAttendee(inputItem);
+            if (invited) {
+              options.invitationResponseStatus = safeString(invited.participationStatus);
+              options.invitedAttendee = normalizeMail(invited.id);
+            }
+          } catch (_) {}
+          const hint = await cachedInvitationHint(this, inputItem);
+          if (hint?.graphEventId) {
+            options.cachedGraphEventId = hint.graphEventId;
+            options.cachedICalUId = hint.iCalUId || "";
+          }
+        }
+
         const results = await this.extension.emit(
           "nativeCalendar.onItemCreated",
           calendarDescriptor(this),

@@ -1,6 +1,6 @@
 {
   "name": "m365-calendar-for-thunderbird",
-  "version": "2.0.36",
+  "version": "2.0.39",
   "description": "Open-source Microsoft 365 / Exchange Online / Teams calendar integration for Mozilla Thunderbird",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "license": "MPL-2.0",
@@ -9,7 +9,8 @@
     "test": "python tools/run_tests.py",
     "build": "python tools/build_xpi.py --all",
     "check:neutral": "python tools/neutrality_check.py",
-    "check:atn": "python tools/atn_check.py"
+    "check:atn": "python tools/atn_check.py",
+    "build:atn": "python tools/build_xpi.py --atn"
   },
   "keywords": [
     "thunderbird",

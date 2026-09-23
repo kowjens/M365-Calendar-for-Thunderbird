@@ -6,7 +6,7 @@
 
 Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird** using Microsoft Graph and OAuth2/PKCE, with Teams meeting support, invitation handling and optional integration into Thunderbird's native Calendar UI.
 
-**Version:** 2.0.36 / V2.36  
+**Version:** 2.0.39 / V2.39  
 **Author:** Jens Kowalsky, 3-5 Power Electronics GmbH  
 **License:** Mozilla Public License 2.0
 
@@ -15,6 +15,7 @@ Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla T
 ### Outgoing-message confirmation (V2.35)
 
 An optional safety switch, enabled by default, asks for confirmation before this add-on triggers meeting invitations, updates, cancellations or RSVP messages through Microsoft Graph. The dialog shows the action, event and known recipients. Cancelling fails closed and sends nothing. Ordinary Thunderbird composer email is not intercepted.
+
 
 
 ## Editions
@@ -26,6 +27,14 @@ The public editions intentionally use different stable add-on IDs:
 
 - NATIVE: `m365-calendar-for-thunderbird@3-5pe.com`
 - STANDARD: `m365-calendar-standard@3-5pe.com`
+
+## Thunderbird compatibility
+
+**Thunderbird ESR is recommended for production/business deployments**, because the NATIVE edition relies on a Thunderbird Experiment API and ESR reduces major-version API churn. The normal Monthly release channel remains supported: the GitHub and INTERNAL NATIVE builds intentionally have **no `strict_max_version`**, so a Monthly update is not blocked merely because its major version increased.
+
+The addons.thunderbird.net NATIVE package is the exception: ATN requires Experiment-based submissions to declare a maximum Thunderbird version. V2.39 therefore generates a separate ATN package capped at the currently targeted Thunderbird 156 branch, while the GitHub/INTERNAL NATIVE packages remain uncapped.
+
+See [Thunderbird compatibility policy](docs/COMPATIBILITY.md) for details.
 
 ## Quick start
 
@@ -58,6 +67,14 @@ Detailed setup:
 - Recurring event and exception synchronization
 - Read-only diagnostic export comparing Graph, M365 Space and Thunderbird native cache/range queries
 - No analytics, advertising or project-operated telemetry service
+
+## V2.39
+
+V2.39 changes the release-channel policy without changing the Microsoft Graph calendar semantics introduced in V2.34–V2.38. **ESR is the recommended production channel**, while normal Thunderbird Monthly releases remain usable and testable. GitHub and INTERNAL NATIVE builds no longer declare `strict_max_version`; only the ATN submission package receives the maximum-version field required for Experiment review. The standalone Settings & diagnostics page from V2.38 remains available for post-update troubleshooting.
+
+## V2.38
+
+V2.38 added a standalone **Settings & diagnostics** page reachable from Thunderbird's Add-ons Manager, so background, Experiment and native-provider status can be inspected even if the M365 Space UI is unavailable. It also extended the then-current public NATIVE compatibility declaration through Thunderbird 156. V2.39 supersedes that distribution strategy by keeping GitHub/INTERNAL NATIVE builds uncapped.
 
 ## V2.36
 
