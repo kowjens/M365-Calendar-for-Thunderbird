@@ -166,7 +166,24 @@ button:disabled { opacity: .5; cursor: default; }
 @media (max-width: 620px) {
   .native-range-grid { grid-template-columns: 1fr; }
 }
-\n\n/* V2.01 comfort functions */\n.detail-wide { grid-column: 1 / -1; }\n.inline-actions { margin-top: 6px; }\n.availability-results { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); display: grid; gap: 4px; }\n.availability-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }\n.availability-free { color: light-dark(#176b42, #73d7a6); }\n.availability-busy { color: light-dark(#9b2c24, #ff9189); }\n.recurrence-box { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px 12px; margin: 0; }\n.recurrence-box legend { color: var(--muted); font-size: 11px; padding: 0 5px; }\n.recurrence-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }\n.recurrence-grid label { display: flex; flex-direction: column; gap: 5px; }\n.attendee-status-list { display: grid; gap: 2px; }\n.attendee-status-line { display: flex; justify-content: space-between; gap: 8px; }\n.shared-calendar::after { content: " ↗"; opacity: .7; }\n@media (max-width: 620px) { .recurrence-grid { grid-template-columns: 1fr; } }\n
+
+
+/* V2.01 comfort functions */
+.detail-wide { grid-column: 1 / -1; }
+.inline-actions { margin-top: 6px; }
+.availability-results { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); display: grid; gap: 4px; }
+.availability-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }
+.availability-free { color: light-dark(#176b42, #73d7a6); }
+.availability-busy { color: light-dark(#9b2c24, #ff9189); }
+.recurrence-box { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px 12px; margin: 0; }
+.recurrence-box legend { color: var(--muted); font-size: 11px; padding: 0 5px; }
+.recurrence-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.recurrence-grid label { display: flex; flex-direction: column; gap: 5px; }
+.attendee-status-list { display: grid; gap: 2px; }
+.attendee-status-line { display: flex; justify-content: space-between; gap: 8px; }
+.shared-calendar::after { content: " ↗"; opacity: .7; }
+@media (max-width: 620px) { .recurrence-grid { grid-template-columns: 1fr; } }
+
 
 /* V2.04 persistent build-mode indicator */
 .build-mode-banner {

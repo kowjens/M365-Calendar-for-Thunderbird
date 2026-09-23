@@ -15,9 +15,9 @@ The Monthly channel remains a supported target. GitHub and INTERNAL builds are *
 | NATIVE – INTERNAL | none | ESR recommended; Monthly supported/testable without a manifest cap |
 | NATIVE – GitHub | none | ESR recommended; Monthly supported/testable without a manifest cap |
 | STANDARD – GitHub/INTERNAL | none | Uses normal WebExtension APIs; no artificial maximum |
-| NATIVE – addons.thunderbird.net submission | current validated major | ATN's Experiment review/linter requires a maximum version for Experiment-based add-ons |
+| NATIVE – addons.thunderbird.net submission | current validated major | Thunderbird's Experiment-specific review/linter requires a maximum version for accepted Experiment-based add-ons |
 
-For the V2.39 ATN submission the packaged maximum is **Thunderbird 156 (`156.*`)**. This ATN-only limit does not exist in the GitHub or INTERNAL NATIVE XPI. When a later Monthly major is confirmed compatible, the ATN compatibility ceiling can be raised without changing the GitHub/internal build strategy.
+For the V2.40 ATN submission the packaged maximum is **Thunderbird 156 (`156.*`)**. This ATN-only limit does not exist in the GitHub or INTERNAL NATIVE XPI. When a later Monthly major is confirmed compatible, the ATN compatibility ceiling can be raised without changing the GitHub/internal build strategy.
 
 ## Diagnostics after a Thunderbird update
 

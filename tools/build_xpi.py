@@ -68,7 +68,7 @@ if __name__ == '__main__':
     ap=argparse.ArgumentParser()
     ap.add_argument('--variant',choices=['STANDARD','NATIVE'])
     ap.add_argument('--all',action='store_true')
-    ap.add_argument('--atn',action='store_true',help='Build the NATIVE ATN package with the review-required max version')
+    ap.add_argument('--atn',action='store_true',help='Build the NATIVE ATN package with the Experiment-linter max version')
     args=ap.parse_args()
     if args.atn:
         build('NATIVE',atn=True)

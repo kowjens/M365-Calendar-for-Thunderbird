@@ -26,7 +26,7 @@ jobs:
         run: |
           python tools/neutrality_check.py
           python tools/atn_check.py
-      - name: Build public XPIs
+      - name: Build public and ATN XPIs
         run: |
           python tools/build_xpi.py --all
           python tools/build_xpi.py --atn

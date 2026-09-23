@@ -6,7 +6,7 @@
 
 Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird** using Microsoft Graph and OAuth2/PKCE, with Teams meeting support, invitation handling and optional integration into Thunderbird's native Calendar UI.
 
-**Version:** 2.0.39 / V2.39  
+**Version:** 2.0.40 / V2.40  
 **Author:** Jens Kowalsky, 3-5 Power Electronics GmbH  
 **License:** Mozilla Public License 2.0
 
@@ -32,7 +32,7 @@ The public editions intentionally use different stable add-on IDs:
 
 **Thunderbird ESR is recommended for production/business deployments**, because the NATIVE edition relies on a Thunderbird Experiment API and ESR reduces major-version API churn. The normal Monthly release channel remains supported: the GitHub and INTERNAL NATIVE builds intentionally have **no `strict_max_version`**, so a Monthly update is not blocked merely because its major version increased.
 
-The addons.thunderbird.net NATIVE package is the exception: ATN requires Experiment-based submissions to declare a maximum Thunderbird version. V2.39 therefore generates a separate ATN package capped at the currently targeted Thunderbird 156 branch, while the GitHub/INTERNAL NATIVE packages remain uncapped.
+The addons.thunderbird.net NATIVE package is the exception: ATN requires Experiment-based submissions to declare a maximum Thunderbird version. The ATN build therefore remains capped at the currently validated Thunderbird 156 branch, while the GitHub/INTERNAL NATIVE packages remain uncapped. The cap is intentional for the Experiment-based ATN package even if a generic Firefox-oriented validator describes it as unnecessary.
 
 See [Thunderbird compatibility policy](docs/COMPATIBILITY.md) for details.
 
@@ -67,6 +67,10 @@ Detailed setup:
 - Recurring event and exception synchronization
 - Read-only diagnostic export comparing Graph, M365 Space and Thunderbird native cache/range queries
 - No analytics, advertising or project-operated telemetry service
+
+## V2.40
+
+V2.40 is a publication-hardening release. It fixes malformed literal `\n` tokens in `calendar/calendar.css` that could trigger the validator warning **Invalid nesting of selectors**, fixes the GitHub Actions multi-command XPI build step, and adds a regression check for escaped-newline CSS corruption. The ATN NATIVE package intentionally keeps `strict_max_version: 156.*`: Thunderbird's Experiment-specific linter requires a maximum version for accepted Experiment submissions, while GitHub/INTERNAL NATIVE builds remain uncapped. Runtime Microsoft Graph/calendar behavior is otherwise unchanged from V2.39.
 
 ## V2.39
 

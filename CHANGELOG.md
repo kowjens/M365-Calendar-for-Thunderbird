@@ -1,5 +1,14 @@
 # Changelog
 
+## V2.40 (2026-09-23)
+
+- Fixed malformed literal `\n` tokens in both calendar stylesheets, eliminating the validator's CSS selector-nesting warning source.
+- Added a V2.40 regression test for escaped-newline CSS corruption.
+- Fixed the GitHub Actions XPI build step so general-use and ATN builds run as separate shell commands.
+- Kept GitHub/INTERNAL NATIVE builds uncapped while retaining `strict_max_version: 156.*` only in the ATN NATIVE package, matching Thunderbird's Experiment-specific linter requirement.
+- Clarified documentation that a generic Firefox-oriented `strict_max_version not required` warning does not override the Thunderbird Experiment requirement.
+- No intentional change to Graph synchronization, RSVP, Teams, reminder or native-calendar runtime semantics.
+
 ## V2.39 (2026-09-23)
 
 - Adopted an ESR-first compatibility policy while continuing to support Thunderbird Monthly releases.
