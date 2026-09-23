@@ -12,7 +12,7 @@ for variant,expected in EXPECTED.items():
     src=ROOT/'source'/variant
     m=json.loads((src/'manifest.json').read_text(encoding='utf-8'))
     g=m.get('browser_specific_settings',{}).get('gecko',{})
-    if m.get('version')!='2.0.40': errors.append(f'{variant}: version must be 2.0.40')
+    if m.get('version')!='2.0.40': errors.append(f'{variant}: version must be 2.0.40 (actual: {m.get("version")!r})')
     if g.get('id')!=expected['id']: errors.append(f'{variant}: unexpected public ID {g.get("id")}')
     if g.get('strict_min_version')!='128.0': errors.append(f'{variant}: strict_min_version must be 128.0')
     if g.get('strict_max_version') is not None: errors.append(f'{variant}: GitHub source manifest must not impose strict_max_version in V2.40')

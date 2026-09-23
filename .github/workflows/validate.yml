@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Repository version sanity
+        run: python tools/version_check.py
       - name: Syntax and regression tests
         run: python tools/run_tests.py
       - name: Public neutrality and ATN checks

@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
-  "version": "2.0.39",
+  "version": "2.0.40",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "default_locale": "de",
   "browser_specific_settings": {
