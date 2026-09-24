@@ -1,4 +1,4 @@
-# Administrator Guide – M365 Calendar for Thunderbird V2.39
+# Administrator Guide – M365 Calendar for Thunderbird V2.43
 
 Build: **GITHUB / NATIVE**
 
@@ -195,3 +195,8 @@ Live attendee search returns as soon as `contacts.quickSearch()` yields a match.
 ## V2.27: Address books for attendee suggestions
 
 Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address books can be selected under **Address books for attendee suggestions**. The selection limits live attendee lookup and can exclude large legacy/collected address books.
+
+
+## V2.43 – split mail / external invitations
+
+For deployments that keep ordinary email at one.com while Exchange Online processes Teams/calendar traffic, see [one.com + Exchange Online calendar relay](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_EN.md). Microsoft Entra registration is documented in [Microsoft Entra setup](setup/MICROSOFT_ENTRA_SETUP_EN.md).

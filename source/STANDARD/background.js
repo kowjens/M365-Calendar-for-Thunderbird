@@ -1,14 +1,14 @@
 "use strict";
 
-const VERSION = "2.0.40";
-const CONFIG_SCHEMA_VERSION = 206;
+const VERSION = "2.0.43";
+const CONFIG_SCHEMA_VERSION = 207;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
 const SYNC_EVENT_SELECT = "id,subject,start,end,location,organizer,attendees,responseStatus,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,webLink,isOrganizer,type,showAs,sensitivity,body,bodyPreview,isCancelled,isAllDay,iCalUId,uid,seriesMasterId,originalStart,originalStartTimeZone,originalEndTimeZone,recurrence,isReminderOn,reminderMinutesBeforeStart,categories,hideAttendees,lastModifiedDateTime,changeKey";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const BUILD_DEFAULTS = (typeof M365_BUILD_DEFAULTS !== "undefined" && M365_BUILD_DEFAULTS)
   ? M365_BUILD_DEFAULTS
-  : { clientId: "", tenant: "", buildFlavor: "github", nativeMode: true };
+  : { clientId: "", tenant: "", buildFlavor: "github", nativeMode: true, externalImipFallback: false };
 const DEFAULT_CONFIG = {
   clientId: String(BUILD_DEFAULTS.clientId || ""),
   tenant: String(BUILD_DEFAULTS.tenant || ""),
@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
   nativeDaysAfter: 365,
   contactAddressBookIds: ["*"],
   confirmOutgoingMessages: true,
+  externalImipFallback: BUILD_DEFAULTS.externalImipFallback === true,
   configSchemaVersion: CONFIG_SCHEMA_VERSION
 };
 
@@ -450,6 +451,7 @@ function normalizeConfig(input = {}) {
     : ["*"];
   if (clean.contactAddressBookIds.includes("*")) clean.contactAddressBookIds = ["*"];
   clean.confirmOutgoingMessages = clean.confirmOutgoingMessages !== false;
+  clean.externalImipFallback = clean.externalImipFallback === true;
   clean.configSchemaVersion = CONFIG_SCHEMA_VERSION;
   return clean;
 }

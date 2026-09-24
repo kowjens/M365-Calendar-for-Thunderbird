@@ -1,136 +1,104 @@
 <p align="center">
-  <img src="assets/branding/qnd-by-jk-512.png" alt="QnD by JK" width="160">
+  <img src="assets/branding/qnd-by-jk-512.png" alt="QnD by JK" width="150">
 </p>
 
 # M365 Calendar for Thunderbird
 
-Open-source **Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird** using Microsoft Graph and OAuth2/PKCE, with Teams meeting support, invitation handling and optional integration into Thunderbird's native Calendar UI.
+Open-source Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird using **Microsoft Graph**, **OAuth2 Authorization Code + PKCE**, Microsoft Teams meeting support and optional native Thunderbird Calendar integration.
 
-**Version:** 2.0.40 / V2.40  
+**Version:** 2.0.43 / V2.43  
 **Author:** Jens Kowalsky, 3-5 Power Electronics GmbH  
 **License:** Mozilla Public License 2.0
 
-> Independent community project. It is not an official product of Microsoft, Mozilla/Thunderbird, or 3-5 Power Electronics GmbH.
-
-### Outgoing-message confirmation (V2.35)
-
-An optional safety switch, enabled by default, asks for confirmation before this add-on triggers meeting invitations, updates, cancellations or RSVP messages through Microsoft Graph. The dialog shows the action, event and known recipients. Cancelling fails closed and sends nothing. Ordinary Thunderbird composer email is not intercepted.
-
-
+> Independent community project. Not an official Microsoft, Mozilla/Thunderbird or 3-5 Power Electronics product.
 
 ## Editions
 
-- **NATIVE — recommended/public ATN edition.** Adds Microsoft 365 calendars to Thunderbird's built-in Calendar UI and keeps the M365 Space, Teams meeting creation, invitation handling, attendee autocomplete and Graph synchronization. It uses a Thunderbird Experiment API; Thunderbird therefore displays the broad **“full, unrestricted access”** permission warning.
-- **STANDARD — GitHub fallback edition.** Provides the M365 Space, Graph calendar UI, Teams meeting creation and invitation workflow without the privileged native-calendar Experiment.
+| Edition | Native Thunderbird Calendar | Experiment API | Intended use |
+|---|---:|---:|---|
+| **NATIVE** | Yes | Yes | Recommended full integration |
+| **STANDARD** | No | No | Graph/M365 Space fallback |
+| **INTERNAL NATIVE** | Yes | Yes | Preconfigured internal deployment |
+| **INTERNAL STANDARD** | No | No | Preconfigured internal fallback |
 
-The public editions intentionally use different stable add-on IDs:
+Public IDs:
 
 - NATIVE: `m365-calendar-for-thunderbird@3-5pe.com`
 - STANDARD: `m365-calendar-standard@3-5pe.com`
 
-## Thunderbird compatibility
+Thunderbird **ESR is recommended for production**. GitHub/INTERNAL NATIVE builds are uncapped; the ATN Experiment package carries the validated ATN maximum (`156.*`).
 
-**Thunderbird ESR is recommended for production/business deployments**, because the NATIVE edition relies on a Thunderbird Experiment API and ESR reduces major-version API churn. The normal Monthly release channel remains supported: the GitHub and INTERNAL NATIVE builds intentionally have **no `strict_max_version`**, so a Monthly update is not blocked merely because its major version increased.
+## Highlights
 
-The addons.thunderbird.net NATIVE package is the exception: ATN requires Experiment-based submissions to declare a maximum Thunderbird version. The ATN build therefore remains capped at the currently validated Thunderbird 156 branch, while the GitHub/INTERNAL NATIVE packages remain uncapped. The cap is intentional for the Experiment-based ATN package even if a generic Firefox-oriented validator describes it as unnecessary.
+- Microsoft Graph calendar synchronization
+- Native Thunderbird calendar provider (NATIVE)
+- Create/edit events and Teams meetings
+- Accept / Tentative / Decline meeting requests
+- Recurring events and exceptions
+- Thunderbird address-book attendee suggestions
+- Microsoft 365 Month / Week / Day / Agenda Space
+- Outgoing meeting-message confirmation
+- Diagnostic export and native-provider diagnostics
+- **Split-mail support (introduced in V2.42):** safe handling of external iMIP invitations received through a non-Microsoft IMAP mailbox
 
-See [Thunderbird compatibility policy](docs/COMPATIBILITY.md) for details.
+## one.com + Exchange Online split mail
+
+The split-mail support introduced in V2.42 is designed for deployments where normal mail remains at a third-party provider such as **one.com**, while Teams/calendar processing runs through Exchange Online.
+
+The preferred production architecture follows Microsoft's documented third-party-mail model: keep the existing MX, dual-deliver/forward inbound mail to Exchange Online, process `Calendaring` messages there and discard the forwarded non-calendar copy. This allows ordinary IMAP/SMTP mail to remain at one.com while meeting requests and responses populate the Microsoft 365 calendar.
+
+The NATIVE edition also contains an optional safety fallback for an unmatched external iMIP request: it creates a **personal M365 copy without attendees** and lets Thunderbird send the RSVP through the receiving mail identity. It never recreates the invitation as a new Graph meeting with the original attendee list.
+
+**Setup guide:** [one.com + Exchange Online calendar relay](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md)
 
 ## Quick start
 
-The public build uses **bring-your-own Microsoft Entra application registration**. No tenant or Client ID is embedded in the public package.
+1. Install NATIVE (or STANDARD if Experiment APIs are not desired).
+2. Open **Settings & diagnostics**.
+3. Copy the displayed OAuth redirect URI.
+4. Create a Microsoft Entra SPA app and add the delegated Graph permissions.
+5. Enter **Application (Client) ID** and **Directory (tenant) ID**.
+6. Select **Microsoft login**.
 
-1. Install the NATIVE XPI from `release/` (or from addons.thunderbird.net after publication).
-2. Open the **Microsoft 365** Space in Thunderbird and open **Settings**.
-3. Copy the OAuth redirect URI shown by the add-on.
-4. Register/configure a Microsoft Entra SPA application with delegated Graph permissions `User.Read`, `Calendars.ReadWrite` and `Calendars.ReadWrite.Shared`.
-5. Enter the Client ID and tenant in the add-on settings and select **Microsoft Login**.
+Detailed Entra setup: [German](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) · [English](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md)
 
-Detailed setup:
+## Documentation
 
-- [User guide — English](docs/USER_GUIDE_EN.md)
-- [User guide — German](docs/USER_GUIDE_DE.md)
-- [Administrator guide — English](docs/ADMIN_GUIDE_EN.md)
-- [Administrator guide — German](docs/ADMIN_GUIDE_DE.md)
-- [Troubleshooting / known Thunderbird view issue](docs/TROUBLESHOOTING.md)
-- [Permissions and Microsoft Graph scopes](docs/PERMISSIONS.md)
+Start with the [documentation index](docs/README.md).
 
-## Main features
+| Topic | German | English |
+|---|---|---|
+| User guide | [DE](docs/USER_GUIDE_DE.md) | [EN](docs/USER_GUIDE_EN.md) |
+| Administrator guide | [DE](docs/ADMIN_GUIDE_DE.md) | [EN](docs/ADMIN_GUIDE_EN.md) |
+| Entra app setup | [DE](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) | [EN](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md) |
+| one.com / Exchange calendar relay | [DE](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md) | [EN](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_EN.md) |
 
-- Microsoft Graph OAuth2 Authorization Code + PKCE
-- Microsoft 365 Space with Month, Week, Day and Agenda views
-- Native Thunderbird calendar integration in the NATIVE edition
-- Create and edit Microsoft 365 events
-- Create Microsoft Teams meetings
-- Accept / tentative / decline meeting invitations through Graph
-- Thunderbird address-book suggestions for attendees
-- Recurring event and exception synchronization
-- Read-only diagnostic export comparing Graph, M365 Space and Thunderbird native cache/range queries
-- No analytics, advertising or project-operated telemetry service
+Also see [Permissions](docs/PERMISSIONS.md), [Compatibility](docs/COMPATIBILITY.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Changelog](CHANGELOG.md) and [V2.43 release notes](docs/releases/V2.43.md).
 
-## V2.40
+## Microsoft Entra permissions
 
-V2.40 is a publication-hardening release. It fixes malformed literal `\n` tokens in `calendar/calendar.css` that could trigger the validator warning **Invalid nesting of selectors**, fixes the GitHub Actions multi-command XPI build step, and adds a regression check for escaped-newline CSS corruption. The ATN NATIVE package intentionally keeps `strict_max_version: 156.*`: Thunderbird's Experiment-specific linter requires a maximum version for accepted Experiment submissions, while GitHub/INTERNAL NATIVE builds remain uncapped. Runtime Microsoft Graph/calendar behavior is otherwise unchanged from V2.39.
+The public build contains no tenant-specific Client ID. Configure your own Entra SPA registration with delegated access required by the add-on, including `User.Read`, `Calendars.ReadWrite` and `Calendars.ReadWrite.Shared`, plus the OIDC/OAuth scopes used for login and refresh tokens.
 
-## V2.39
-
-V2.39 changes the release-channel policy without changing the Microsoft Graph calendar semantics introduced in V2.34–V2.38. **ESR is the recommended production channel**, while normal Thunderbird Monthly releases remain usable and testable. GitHub and INTERNAL NATIVE builds no longer declare `strict_max_version`; only the ATN submission package receives the maximum-version field required for Experiment review. The standalone Settings & diagnostics page from V2.38 remains available for post-update troubleshooting.
-
-## V2.38
-
-V2.38 added a standalone **Settings & diagnostics** page reachable from Thunderbird's Add-ons Manager, so background, Experiment and native-provider status can be inspected even if the M365 Space UI is unavailable. It also extended the then-current public NATIVE compatibility declaration through Thunderbird 156. V2.39 supersedes that distribution strategy by keeping GitHub/INTERNAL NATIVE builds uncapped.
-
-## V2.36
-
-V2.36 prevents Thunderbird-local reminder actions such as **Dismiss** and **Snooze** from reaching Microsoft Graph. Local alarm bookkeeping is kept in Thunderbird only; no outgoing-message confirmation, Graph PATCH or attendee mail is triggered. The V2.35 confirmation gate remains enabled by default for real meeting writes.
-
-## V2.34
-
-V2.34 focuses on **Teams invitation interoperability and safe Thunderbird iTIP handling**.
-
-- Final public NATIVE add-on ID: `m365-calendar-for-thunderbird@3-5pe.com`
-- Public STANDARD ID: `m365-calendar-standard@3-5pe.com`
-- Recover Teams join URLs from external invitation body/location text when Graph does not populate `onlineMeeting.joinUrl`
-- Treat email iTIP Accept/Tentative/Decline as a dedicated Graph RSVP, including the `add/adoptItem()` path used by Thunderbird/EWS
-- Never create a new Graph meeting from an invitation response; unresolved invitation matching fails closed without sending a meeting update
-- Track the Thunderbird mail identity (`imip.identity`) in addition to the Graph account address and mark `X-MOZ-INVITED-ATTENDEE` for native scheduling
-- Re-adopt native cache rows once with mapping marker `2.34-itip-teams-links` so existing items gain the corrected join-link and invitation metadata
-- Keep the previously diagnosed Thunderbird Multiweek rendering issue documented separately; no destructive workaround is applied
-
-## Known Thunderbird Multiweek display issue
-
-A V2.32 diagnostic comparison reproduced a case where the **same event was returned by Graph, stored in the native cache and returned by all native range-query variants in two overlapping 14-day ranges, but Thunderbird rendered it only when its week was the first row of Multiweek view**. This strongly localizes that specific symptom to Thunderbird's calendar view/rendering layer rather than Graph synchronization.
-
-See [Troubleshooting](docs/TROUBLESHOOTING.md). No destructive sync workaround is applied for this frontend-only symptom.
-
-## Related projects and alternatives
-
-Different projects solve Exchange/Microsoft 365 integration in different ways:
-
-- [TbSync + Provider for Exchange ActiveSync](https://addons.thunderbird.net/thunderbird/addon/eas-4-tbsync/) — EAS-based calendar/contact synchronization
-- [Exchange Calendar Sync for Thunderbird](https://github.com/michafn/exchange-cal-sync-thunderbird) — open-source EWS-based calendar synchronization
-- [Owl for Exchange](https://addons.thunderbird.net/thunderbird/addon/owl-for-exchange/) — commercial Exchange/Microsoft 365 integration
-- [ExQuilla for Exchange](https://addons.thunderbird.net/thunderbird/addon/exquilla-exchange-web-services/) — commercial EWS integration
-
-M365 Calendar for Thunderbird differs by focusing on **Microsoft Graph calendar/Teams workflows and native Thunderbird calendar integration**.
+No client secret is used or required.
 
 ## Build and test
 
 ```bash
+python tools/version_check.py
 python tools/run_tests.py
 python tools/neutrality_check.py
 python tools/atn_check.py
 python tools/build_xpi.py --all
+python tools/build_xpi.py --atn
 ```
 
-See [BUILD.md](BUILD.md) for details.
+See [BUILD.md](BUILD.md).
 
-## Privacy and security
+## Privacy
 
-Calendar/meeting data is exchanged only with Microsoft identity/Graph endpoints as required for the requested Microsoft 365 functionality. OAuth tokens, settings and native calendar cache data are stored locally in the Thunderbird profile. The project has no analytics or telemetry backend.
+Calendar/meeting data is exchanged with Microsoft identity and Microsoft Graph endpoints only as required for the configured functionality. Tokens and configuration are stored locally in the Thunderbird profile. The project has no analytics, advertising or project-operated telemetry backend.
 
-- [Privacy policy](PRIVACY.md)
-- [Security policy](SECURITY.md)
+See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
 ## License
 

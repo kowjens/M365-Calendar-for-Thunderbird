@@ -247,6 +247,12 @@ function _m365NativeCreateProviderRuntime() {
   } catch (error) {
     console.warn("M365 native MailServices import failed; identity/address-book integration will use WebExtension fallbacks", error);
   }
+  let CalItipEmailTransport = null;
+  try {
+    ({ CalItipEmailTransport } = ChromeUtils.importESModule("resource:///modules/calendar/CalItipEmailTransport.sys.mjs"));
+  } catch (error) {
+    console.warn("M365 native iMIP email transport import failed; external-email fallback replies may be unavailable", error);
+  }
 
   /* M365 native Thunderbird calendar provider implementation.
    * Loaded lazily by api.js so provider incompatibilities cannot break the add-on UI.
@@ -471,40 +477,117 @@ function _m365NativeCreateProviderRuntime() {
     });
   }
 
-  function calendarStartupReady() {
+  // Thunderbird <=153 used CalStartupService and the calendar-startup-done
+  // observer notification. Thunderbird 154 removed that service and moved the
+  // calendar manager to lazy/self initialization. Keep both paths so the same
+  // Experiment works on ESR/older releases and current monthly releases.
+  function legacyCalendarStartupService() {
     try {
-      const service = Cc["@mozilla.org/calendar/startup-service;1"].getService().wrappedJSObject;
-      return Boolean(service?.started);
+      const contract = Cc["@mozilla.org/calendar/startup-service;1"];
+      if (!contract) return null;
+      const service = contract.getService(Ci.nsISupports);
+      return service?.wrappedJSObject || service || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function modernCalendarManagerReady() {
+    try {
+      return Boolean(cal?.manager && typeof cal.manager.getCalendars === "function");
     } catch (_) {
       return false;
     }
   }
 
-  async function waitForCalendarStartup() {
-    if (calendarStartupReady()) return;
-    await new Promise(resolve => {
+  function calendarStartupReady() {
+    const legacy = legacyCalendarStartupService();
+    if (legacy) return Boolean(legacy.started);
+    return modernCalendarManagerReady();
+  }
+
+  async function waitForCalendarStartup(timeoutMs = 12000) {
+    const legacy = legacyCalendarStartupService();
+
+    // Thunderbird 154+: CalStartupService/calendar-startup-done no longer
+    // exist. getCalendars() calls assureCache() and is the supported lazy
+    // initialization point for CalCalendarManager.
+    if (!legacy) {
+      if (!modernCalendarManagerReady()) {
+        throw new Error("Thunderbird calendar manager is unavailable");
+      }
+      cal.manager.getCalendars();
+      return;
+    }
+
+    // Thunderbird <=153 legacy path.
+    if (legacy.started) return;
+    await new Promise((resolve, reject) => {
       let done = false;
-      const finish = () => {
+      let timer = null;
+      const finish = error => {
         if (done) return;
         done = true;
         try { Services.obs.removeObserver(observer, "calendar-startup-done"); } catch (_) {}
-        resolve();
+        if (timer) nativeClearTimeout(timer);
+        if (error) reject(error);
+        else resolve();
       };
-      const observer = { observe: finish };
+      const observer = { observe: () => finish() };
       Services.obs.addObserver(observer, "calendar-startup-done");
+      timer = nativeSetTimeout(() => {
+        if (legacy.started) finish();
+        else finish(new Error(`Timed out after ${timeoutMs} ms waiting for legacy calendar startup`));
+      }, Math.max(1000, Number(timeoutMs) || 12000));
       // If the notification raced us, the started flag is already set.
-      if (calendarStartupReady()) finish();
+      if (legacy.started) finish();
     });
   }
 
-  class NoEmailTransport {
+  function itipItemUids(itipItem) {
+    const result = new Set();
+    let items = [];
+    try { items = itipItem?.getItemList?.() || []; } catch (_) {}
+    if (!Array.isArray(items)) {
+      try { items = [...items]; } catch (_) { items = []; }
+    }
+    for (const item of items) {
+      for (const value of [item?.id, item?.getProperty?.("X-M365-ICALUID"), item?.getProperty?.("X-M365-EXTERNAL-IMIP-UID")]) {
+        const uid = normalizedInvitationUid(value);
+        if (uid) result.add(uid);
+      }
+    }
+    return result;
+  }
+
+  class M365ItipTransport {
     wrappedJSObject = this;
     QueryInterface = ChromeUtils.generateQI(["calIItipTransport"]);
     senderAddress = "";
+    constructor(calendar) { this.calendar = calendar; }
     get scheme() { return "mailto"; }
     get type() { return "m365-graph"; }
-    sendItems() {
-      // Exchange Online/Graph sends scheduling messages server-side.
+    sendItems(...args) {
+      const itipItem = args.find(value => value && (value.responseMethod || typeof value.getItemList === "function"));
+      const responseMethod = safeString(itipItem?.responseMethod).toUpperCase();
+      const uids = itipItemUids(itipItem);
+      const useEmail = responseMethod === "REPLY" && this.calendar?.consumeExternalImipReply?.(uids);
+      if (useEmail) {
+        let transport = null;
+        if (CalItipEmailTransport?.createInstance) {
+          transport = CalItipEmailTransport.createInstance();
+        } else {
+          try {
+            transport = Cc["@mozilla.org/calendar/itip-transport;1?type=email"].getService(Ci.calIItipTransport);
+          } catch (_) {}
+        }
+        if (!transport?.sendItems) {
+          throw new Error("Thunderbird iMIP email transport is unavailable for the external invitation reply");
+        }
+        return transport.sendItems(...args);
+      }
+      // Normal M365 scheduling remains Graph-owned. Suppress Thunderbird email
+      // so Graph RSVP/invite/update actions cannot be duplicated.
       return true;
     }
   }
@@ -705,7 +788,10 @@ function _m365NativeCreateProviderRuntime() {
       changeKey: safeString(item.getProperty("X-M365-CHANGEKEY")),
       iCalUId: safeString(item.getProperty("X-M365-ICALUID")),
       nativeUid: safeString(item.id),
-      invitedAttendee: normalizeMail(item.getProperty("X-MOZ-INVITED-ATTENDEE"))
+      invitedAttendee: normalizeMail(item.getProperty("X-MOZ-INVITED-ATTENDEE")),
+      externalImipFallback: safeString(item.getProperty("X-M365-EXTERNAL-IMIP-FALLBACK")).toUpperCase() === "TRUE",
+      externalImipOriginalUid: safeString(item.getProperty("X-M365-EXTERNAL-IMIP-UID")),
+      externalImipResponseStatus: safeString(item.getProperty("X-M365-EXTERNAL-IMIP-PARTSTAT"))
     };
   }
 
@@ -797,6 +883,9 @@ function _m365NativeCreateProviderRuntime() {
     if (data?.seriesMasterId) item.setProperty("X-M365-SERIES-MASTER-ID", safeString(data.seriesMasterId));
     if (data?.changeKey) item.setProperty("X-M365-CHANGEKEY", safeString(data.changeKey));
     if (data?.iCalUId) item.setProperty("X-M365-ICALUID", safeString(data.iCalUId));
+    if (data?.externalImipFallback) item.setProperty("X-M365-EXTERNAL-IMIP-FALLBACK", "TRUE");
+    if (data?.externalImipOriginalUid) item.setProperty("X-M365-EXTERNAL-IMIP-UID", safeString(data.externalImipOriginalUid));
+    if (data?.externalImipResponseStatus) item.setProperty("X-M365-EXTERNAL-IMIP-PARTSTAT", safeString(data.externalImipResponseStatus));
     item.setProperty("X-M365-NATIVE-MAP-VERSION", NATIVE_MAPPING_VERSION);
 
     if (data?.status) item.status = safeString(data.status).toUpperCase();
@@ -813,7 +902,7 @@ function _m365NativeCreateProviderRuntime() {
     // the calendar identity for the native mirror even if Graph exposes the
     // organizer through another SMTP/UPN alias. This prevents Thunderbird from
     // misclassifying a personal appointment as an invitation from another user.
-    if (data?.isAppointment && calendarSelfAddress) {
+    if (data?.isAppointment && calendarSelfAddress && !data?.externalImipFallback) {
       organizerData = { address: calendarSelfAddress, name: calendarSelfName, role: "CHAIR", status: "ACCEPTED", rsvp: false, type: "INDIVIDUAL" };
     }
     if (organizerData?.address) {
@@ -831,7 +920,7 @@ function _m365NativeCreateProviderRuntime() {
         address: calendarSelfAddress,
         name: calendarSelfName,
         role: "REQ-PARTICIPANT",
-        status: "ACCEPTED",
+        status: data?.externalImipResponseStatus || "ACCEPTED",
         rsvp: false,
         type: "INDIVIDUAL"
       }, false);
@@ -850,6 +939,10 @@ function _m365NativeCreateProviderRuntime() {
       if (!data?.isOrganizer && invited?.address) {
         item.setProperty("X-MOZ-INVITED-ATTENDEE", `mailto:${normalizeMail(invited.address)}`);
       }
+    }
+    const explicitInvited = normalizeMail(data?.invitedAttendee);
+    if (explicitInvited && !data?.isOrganizer) {
+      item.setProperty("X-MOZ-INVITED-ATTENDEE", `mailto:${explicitInvited}`);
     }
     if (data?.reminderMinutes != null) addReminder(item, data.reminderMinutes);
     return item;
@@ -1444,6 +1537,7 @@ function _m365NativeCreateProviderRuntime() {
       this.wrappedJSObject = this;
       this._cachedAdoptItemCallback = null;
       this._cachedModifyItemCallback = null;
+      this._externalImipReplyUids = new Map();
     }
 
     get type() {
@@ -1483,8 +1577,38 @@ function _m365NativeCreateProviderRuntime() {
       }
     }
 
+    markExternalImipReply(uid) {
+      const key = normalizedInvitationUid(uid);
+      if (!key) return;
+      this._externalImipReplyUids.set(key, Date.now() + 120000);
+    }
+
+    consumeExternalImipReply(uids) {
+      const now = Date.now();
+      for (const [key, expires] of [...this._externalImipReplyUids.entries()]) {
+        if (expires <= now) this._externalImipReplyUids.delete(key);
+      }
+      for (const uid of uids || []) {
+        const key = normalizedInvitationUid(uid);
+        if (key && this._externalImipReplyUids.has(key)) {
+          this._externalImipReplyUids.delete(key);
+          return true;
+        }
+      }
+      // Thunderbird versions differ in which UID survives into the REPLY item.
+      // When exactly one fresh fallback reply is pending, it is safe to consume
+      // that one rather than losing the user's RSVP.
+      if (this._externalImipReplyUids.size === 1) {
+        const [key] = this._externalImipReplyUids.keys();
+        this._externalImipReplyUids.delete(key);
+        return true;
+      }
+      return false;
+    }
+
     canNotify() {
-      // Graph/Exchange Online is responsible for all meeting notifications.
+      // Graph owns normal M365 meeting notifications. V2.42 switches only a
+      // marked external-iMIP fallback REPLY to Thunderbird's email transport.
       return true;
     }
 
@@ -1532,7 +1656,7 @@ function _m365NativeCreateProviderRuntime() {
         case "imip.account":
           return accountForIdentity(this.getProperty("imip.identity"));
         case "itip.transport":
-          return new NoEmailTransport();
+          return new M365ItipTransport(this);
         default:
           return super.getProperty(name);
       }
@@ -1582,6 +1706,9 @@ function _m365NativeCreateProviderRuntime() {
         );
         const result = firstUsefulResult(results);
         if (!result?.id) throw new Error("Microsoft 365 did not return the created event");
+        if (result?.nativeOperation === "external-imip-fallback") {
+          this.markExternalImipReply(result.externalImipOriginalUid || inputItem?.id);
+        }
         const item = plainToItem(result, this);
         if (result?.nativeOperation === "rsvp-existing" && item?.id) {
           // CalCachedCalendar's ADD callback inserts the returned provider item.

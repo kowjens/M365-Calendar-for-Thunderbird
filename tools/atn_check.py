@@ -3,6 +3,7 @@ from pathlib import Path
 import json, re, sys, importlib.util
 
 ROOT=Path(__file__).resolve().parents[1]
+REPOSITORY_VERSION=(ROOT/'VERSION').read_text(encoding='utf-8').strip()
 EXPECTED={
     "NATIVE":{"id":"m365-calendar-for-thunderbird@3-5pe.com"},
     "STANDARD":{"id":"m365-calendar-standard@3-5pe.com"},
@@ -12,10 +13,10 @@ for variant,expected in EXPECTED.items():
     src=ROOT/'source'/variant
     m=json.loads((src/'manifest.json').read_text(encoding='utf-8'))
     g=m.get('browser_specific_settings',{}).get('gecko',{})
-    if m.get('version')!='2.0.40': errors.append(f'{variant}: version must be 2.0.40 (actual: {m.get("version")!r})')
+    if m.get('version')!=REPOSITORY_VERSION: errors.append(f'{variant}: version must be {REPOSITORY_VERSION} (actual: {m.get("version")!r})')
     if g.get('id')!=expected['id']: errors.append(f'{variant}: unexpected public ID {g.get("id")}')
     if g.get('strict_min_version')!='128.0': errors.append(f'{variant}: strict_min_version must be 128.0')
-    if g.get('strict_max_version') is not None: errors.append(f'{variant}: GitHub source manifest must not impose strict_max_version in V2.40')
+    if g.get('strict_max_version') is not None: errors.append(f'{variant}: GitHub source manifest must not impose strict_max_version in the GitHub/public source')
     if 'sensitiveDataUpload' not in m.get('permissions',[]): errors.append(f'{variant}: sensitiveDataUpload permission missing')
     cfg=(src/'config'/'build-config.js').read_text(encoding='utf-8')
     if not re.search(r'clientId:\s*""',cfg) or not re.search(r'tenant:\s*""',cfg): errors.append(f'{variant}: public OAuth defaults must be empty')
@@ -31,9 +32,9 @@ for variant,expected in EXPECTED.items():
         if re.search(r'<script[^>]+src=["\']https?://',text,re.I): errors.append(f'{variant}: remote script in {f.relative_to(ROOT)}')
 spec=importlib.util.spec_from_file_location('build_xpi',ROOT/'tools'/'build_xpi.py')
 mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
-if mod.ATN_STRICT_MAX_VERSION!='156.*': errors.append('ATN strict max must be 156.* for V2.40 submission package')
+if mod.ATN_STRICT_MAX_VERSION!='156.*': errors.append('ATN strict max must be 156.* for the current Experiment submission package')
 if errors:
     print('ATN/public preflight failed:')
     for e in errors: print(' -',e)
     sys.exit(1)
-print('ATN/public preflight passed (V2.40; GitHub uncapped; ATN NATIVE package at 156.*).')
+print(f'ATN/public preflight passed ({REPOSITORY_VERSION}; GitHub uncapped; ATN NATIVE package at 156.*).')

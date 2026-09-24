@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.39
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.43
 
 Build: **GITHUB / NATIVE**
 

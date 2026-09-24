@@ -2,6 +2,15 @@
 const $=id=>document.getElementById(id);
 let lastDiagnostics="";
 async function msg(action,extra={}){const r=await browser.runtime.sendMessage({action,...extra});if(!r?.ok)throw new Error(r?.error||`Background action failed: ${action}`);return r.data;}
+async function withTimeout(value,timeoutMs,label){
+  let timer=null;
+  try{
+    return await Promise.race([
+      Promise.resolve(value),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`${label} timed out after ${timeoutMs} ms`)),timeoutMs);})
+    ]);
+  }finally{if(timer!==null)clearTimeout(timer);}
+}
 function state(id,text,ok=true){const el=$(id);el.textContent=text;el.dataset.ok=ok?"1":"0";}
 async function getBrowserInfo(){try{return await browser.runtime.getBrowserInfo();}catch(_){return {name:"Thunderbird",version:"unknown",buildID:"?"};}}
 async function loadSettings(){
@@ -14,7 +23,7 @@ async function refreshDiagnostics(){
   const info=await getBrowserInfo();const manifest=browser.runtime.getManifest();state("tbVersion",`${info.name||"Thunderbird"} ${info.version||"?"}`);state("addonVersion",manifest.version||"?");
   const lines=[`Thunderbird=${info.version||"?"}`,`buildID=${info.buildID||"?"}`,`addon=${manifest.version||"?"}`,`extensionId=${manifest.browser_specific_settings?.gecko?.id||"?"}`,`strictMin=${manifest.browser_specific_settings?.gecko?.strict_min_version||"-"}`,`strictMax=${manifest.browser_specific_settings?.gecko?.strict_max_version||"-"}`];
   try{const pong=await browser.nativeCalendar?.ping?.();state("experimentState",pong?"loaded / ping OK":"unavailable",Boolean(pong));lines.push(`experimentPing=${Boolean(pong)}`);}catch(error){state("experimentState",`ERROR: ${error.message}`,false);lines.push(`experimentError=${error.stack||error}`);}
-  try{const native=await msg("nativeStatus");state("backgroundState","responsive",true);const rows=Array.isArray(native)?native:(native?[native]:[]);const providerOk=rows.some(r=>r?.providerModuleLoaded||r?.registeredCalendarCount>0||r?.managerProviderRegistered);state("providerState",providerOk?"loaded / active":"not active",providerOk);lines.push("nativeStatus="+JSON.stringify(native,null,2));}catch(error){state("backgroundState",`ERROR: ${error.message}`,false);state("providerState","unknown (background unavailable)",false);lines.push(`nativeStatusError=${error.stack||error}`);}
+  try{const native=await withTimeout(msg("nativeStatus"),15000,"nativeStatus");state("backgroundState","responsive",true);const rows=Array.isArray(native)?native:(native?[native]:[]);const providerOk=rows.some(r=>r?.providerModuleLoaded||r?.registeredCalendarCount>0||r?.managerProviderRegistered);state("providerState",providerOk?"loaded / active":"not active",providerOk);lines.push("nativeStatus="+JSON.stringify(native,null,2));}catch(error){state("backgroundState",`ERROR: ${error.message}`,false);state("providerState","unknown (background unavailable)",false);lines.push(`nativeStatusError=${error.stack||error}`);}
   const runningMajor=parseInt(info.version,10);const declaredMax=manifest.browser_specific_settings?.gecko?.strict_max_version;const maxMajor=declaredMax?parseInt(declaredMax,10):null;if(Number.isFinite(runningMajor)&&Number.isFinite(maxMajor)&&runningMajor>maxMajor){$("compatWarning").textContent=`This package declares Thunderbird ${declaredMax} as its maximum version, but Thunderbird ${info.version} is running. Use a compatible package or the uncapped GitHub/internal build.`;$("compatWarning").classList.remove("hidden");}else{$("compatWarning").classList.add("hidden");}
   lastDiagnostics=lines.join("\n");$("diagnostics").textContent=lastDiagnostics;
 }

@@ -1,5 +1,28 @@
 # Changelog
 
+## V2.43 (2026-09-24)
+
+- Added a cumulative V2.40/V2.41/V2.42 recovery path and synchronized all current release metadata to V2.43.
+- Fixed stale V2.41 build-output names and current documentation headers left in the V2.42 GitHub archive.
+- Hardened repository version validation to catch stale current-release metadata before CI/build publication.
+- Retained the V2.41 Thunderbird 154+/156 startup fix and V2.42 split-mail/external-iMIP runtime behavior without intentional Graph semantic changes.
+
+## V2.42 (2026-09-24)
+
+- Added safe NATIVE handling for external iMIP invitations that arrive through a non-Microsoft IMAP mailbox and have no Exchange/Graph event yet.
+- Added optional personal-copy fallback plus Thunderbird iMIP RSVP transport, without recreating attendees in Graph.
+- Added explicit diagnostics and actionable unmatched-invitation errors instead of generic `0x80004005`.
+- Added split-mail deployment documentation for one.com + Exchange Online based on Microsoft's third-party-mail/Teams calendar pattern.
+- Added detailed Microsoft Entra SPA registration instructions and reorganized GitHub documentation.
+- Retained Thunderbird 154+/156 native startup compatibility from V2.41.
+
+## V2.41 (2026-09-24)
+
+- Fixed native calendar activation on Thunderbird 154+ / 156 after removal of the legacy CalStartupService startup path.
+- Added current-Thunderbird lazy Calendar Manager initialization while retaining the older startup-service path.
+- Added bounded native-provider/diagnostics timeouts to prevent indefinite `checking...` / `Loading...` states.
+- Added Thunderbird 154+ startup compatibility regression coverage.
+
 ## V2.40 (2026-09-23)
 
 - Fixed malformed literal `\n` tokens in both calendar stylesheets, eliminating the validator's CSS selector-nesting warning source.

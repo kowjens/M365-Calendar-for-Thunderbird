@@ -1,14 +1,14 @@
 "use strict";
 
-const VERSION = "2.0.40";
-const CONFIG_SCHEMA_VERSION = 206;
+const VERSION = "2.0.43";
+const CONFIG_SCHEMA_VERSION = 207;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
 const SYNC_EVENT_SELECT = "id,subject,start,end,location,organizer,attendees,responseStatus,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,webLink,isOrganizer,type,showAs,sensitivity,body,bodyPreview,isCancelled,isAllDay,iCalUId,uid,seriesMasterId,originalStart,originalStartTimeZone,originalEndTimeZone,recurrence,isReminderOn,reminderMinutesBeforeStart,categories,hideAttendees,lastModifiedDateTime,changeKey";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const BUILD_DEFAULTS = (typeof M365_BUILD_DEFAULTS !== "undefined" && M365_BUILD_DEFAULTS)
   ? M365_BUILD_DEFAULTS
-  : { clientId: "", tenant: "", buildFlavor: "github", nativeMode: true };
+  : { clientId: "", tenant: "", buildFlavor: "github", nativeMode: true, externalImipFallback: false };
 const DEFAULT_CONFIG = {
   clientId: String(BUILD_DEFAULTS.clientId || ""),
   tenant: String(BUILD_DEFAULTS.tenant || ""),
@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
   nativeDaysAfter: 365,
   contactAddressBookIds: ["*"],
   confirmOutgoingMessages: true,
+  externalImipFallback: BUILD_DEFAULTS.externalImipFallback === true,
   configSchemaVersion: CONFIG_SCHEMA_VERSION
 };
 
@@ -450,6 +451,7 @@ function normalizeConfig(input = {}) {
     : ["*"];
   if (clean.contactAddressBookIds.includes("*")) clean.contactAddressBookIds = ["*"];
   clean.confirmOutgoingMessages = clean.confirmOutgoingMessages !== false;
+  clean.externalImipFallback = clean.externalImipFallback === true;
   clean.configSchemaVersion = CONFIG_SCHEMA_VERSION;
   return clean;
 }
@@ -1954,6 +1956,7 @@ async function nativeStatus() {
     daysAfter: config.nativeDaysAfter,
     autoSync: { ...nativeAutoSyncState, timer: Boolean(nativeAutoSyncState.timer) },
     providerStartup: { ...nativeProviderStartupState },
+    externalImipFallback: { enabled: Boolean(config.externalImipFallback), ...externalImipFallbackStats },
     authDiagnostics: await authDiagnostics()
   };
 }
@@ -2368,6 +2371,148 @@ function nativeCalendarAddresses(calendar) {
     .filter(Boolean);
 }
 
+const EXTERNAL_IMIP_MAP_KEY = "externalImipMapV242";
+const externalImipFallbackStats = {
+  created: 0,
+  updated: 0,
+  lastAction: "",
+  lastOriginalUid: "",
+  lastGraphEventId: "",
+  lastOrganizer: "",
+  lastError: ""
+};
+
+function externalImipMapKey(calendarId, uid) {
+  return `${String(calendarId || "")}::${String(uid || "").trim().toLowerCase()}`;
+}
+
+async function getExternalImipMap() {
+  const stored = await browser.storage.local.get(EXTERNAL_IMIP_MAP_KEY);
+  const value = stored?.[EXTERNAL_IMIP_MAP_KEY];
+  return value && typeof value === "object" ? value : {};
+}
+
+async function rememberExternalImipMapping(calendarId, uid, eventId, organizer = "") {
+  if (!calendarId || !uid || !eventId) return;
+  const map = await getExternalImipMap();
+  map[externalImipMapKey(calendarId, uid)] = {
+    eventId: String(eventId),
+    organizer: String(organizer || ""),
+    updatedAt: new Date().toISOString()
+  };
+  const entries = Object.entries(map).sort((a, b) => String(b[1]?.updatedAt || "").localeCompare(String(a[1]?.updatedAt || "")));
+  await browser.storage.local.set({ [EXTERNAL_IMIP_MAP_KEY]: Object.fromEntries(entries.slice(0, 500)) });
+}
+
+async function externalImipMappedEventId(calendarId, uid) {
+  if (!calendarId || !uid) return "";
+  const map = await getExternalImipMap();
+  return String(map?.[externalImipMapKey(calendarId, uid)]?.eventId || "");
+}
+
+function graphResponseValueForExternalImip(action) {
+  if (action === "accept") return "accepted";
+  if (action === "tentativelyAccept") return "tentativelyAccepted";
+  if (action === "decline") return "declined";
+  return "notResponded";
+}
+
+function externalImipPersonalPayload(item, invitation, responseAction) {
+  const payload = M365_NATIVE.nativeItemToGraphPayload(item, { includeAttendees: false });
+  delete payload.attendees;
+  const categories = new Set(Array.isArray(payload.categories) ? payload.categories : []);
+  categories.add("External iMIP invitation");
+  payload.categories = [...categories];
+  if (responseAction === "decline") payload.showAs = "free";
+  else if (responseAction === "tentativelyAccept") payload.showAs = "tentative";
+  const organizer = M365_NATIVE.cleanAddress(invitation?.organizer?.address || item?.organizer?.address);
+  const uid = String(invitation?.uid || item?.iCalUId || item?.nativeUid || "");
+  const responseLabel = responseAction === "tentativelyAccept" ? "tentative" : responseAction;
+  const note = [
+    "[M365 Calendar for Thunderbird] External iMIP invitation fallback.",
+    organizer ? `Original organizer: ${organizer}` : "",
+    uid ? `Original iCalendar UID: ${uid}` : "",
+    responseLabel ? `Local response: ${responseLabel}` : "",
+    "This Microsoft 365 event is a personal calendar copy. Thunderbird sends the RSVP through the email account that received the invitation."
+  ].filter(Boolean).join("\n");
+  const originalBody = String(payload?.body?.content || "").trim();
+  payload.body = { contentType: "text", content: [originalBody, note].filter(Boolean).join("\n\n---\n") };
+  return payload;
+}
+
+async function createOrUpdateExternalImipFallback(calendar, item, options, invitation, responseAction) {
+  const config = await getConfig();
+  if (!config.externalImipFallback) {
+    throw new Error("External email invitation detected, but no matching Exchange event exists. Enable 'External email invitation fallback' or route calendaring mail through Exchange Online. No message was sent and no new meeting was created.");
+  }
+  if (!responseAction) {
+    throw new Error("External email invitation has no Accept/Tentative/Decline attendee state; no fallback calendar copy was created.");
+  }
+  const uid = String(invitation?.uid || item?.iCalUId || item?.nativeUid || "").trim();
+  const organizer = M365_NATIVE.cleanAddress(invitation?.organizer?.address || item?.organizer?.address);
+  const invitedAttendee = M365_NATIVE.cleanAddress(options?.invitedAttendee || item?.invitedAttendee || calendar?.identityEmail || calendar?.organizerId);
+  const payload = externalImipPersonalPayload(item, invitation, responseAction);
+  externalImipFallbackStats.lastAction = responseAction;
+  externalImipFallbackStats.lastOriginalUid = uid;
+  externalImipFallbackStats.lastOrganizer = organizer;
+  externalImipFallbackStats.lastError = "";
+
+  try {
+    let eventId = await externalImipMappedEventId(calendar.graphCalendarId, uid);
+    let result = null;
+    if (eventId) {
+      try {
+        result = await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events/${encodeId(eventId)}`, {
+          method: "PATCH",
+          headers: nativeGraphHeaders(),
+          body: JSON.stringify(payload)
+        });
+        externalImipFallbackStats.updated += 1;
+      } catch (error) {
+        if (Number(error?.status) !== 404) throw error;
+        eventId = "";
+      }
+    }
+    if (!eventId) {
+      result = await graphRequest(`/me/calendars/${encodeId(calendar.graphCalendarId)}/events`, {
+        method: "POST",
+        headers: nativeGraphHeaders(),
+        body: JSON.stringify(payload)
+      });
+      eventId = String(result?.id || "");
+      externalImipFallbackStats.created += 1;
+    }
+    if (!eventId) throw new Error("Microsoft Graph did not return an event id for the external iMIP fallback copy");
+    await rememberExternalImipMapping(calendar.graphCalendarId, uid, eventId, organizer);
+    try { await invalidateAfterNativeWrite(calendar.graphCalendarId); } catch (_) {}
+    let complete = result;
+    try { complete = await getGraphEventForNative(eventId, calendar.graphCalendarId) || result; } catch (_) {}
+    if (complete?.id) rememberNativeUpsert(calendar.graphCalendarId, complete);
+    externalImipFallbackStats.lastGraphEventId = eventId;
+
+    const mapped = M365_NATIVE.graphEventToNative(complete || { ...result, id: eventId });
+    const partstat = responseAction === "accept" ? "ACCEPTED" : responseAction === "tentativelyAccept" ? "TENTATIVE" : "DECLINED";
+    return {
+      ...mapped,
+      id: eventId,
+      iCalUId: uid || mapped.iCalUId,
+      isAppointment: true,
+      isOrganizer: false,
+      organizer: invitation?.organizer?.address ? invitation.organizer : item?.organizer,
+      attendees: [],
+      responseStatus: graphResponseValueForExternalImip(responseAction),
+      invitedAttendee,
+      externalImipFallback: true,
+      externalImipResponseStatus: partstat,
+      externalImipOriginalUid: uid,
+      nativeOperation: "external-imip-fallback"
+    };
+  } catch (error) {
+    externalImipFallbackStats.lastError = error?.message || String(error);
+    throw error;
+  }
+}
+
 function nativePlainItemAsInvitation(item) {
   return {
     method: "REQUEST",
@@ -2404,17 +2549,6 @@ async function nativeCreateHandler(calendar, item, options = {}) {
   // and sends a new meeting request to the participants.
   if (isInvitationOperation) {
     const invitation = nativePlainItemAsInvitation(item);
-    const match = await findEventForInvitationWithRetry(invitation, {
-      cachedGraphEventId: String(options?.cachedGraphEventId || ""),
-      calendarId: calendar.graphCalendarId
-    });
-    if (!match?.event?.id) {
-      throw new Error("Could not match the invitation to the Exchange calendar event after synchronization retries; no message was sent and no new meeting was created.");
-    }
-    if (match.event.isOrganizer) {
-      throw new Error("The matched Microsoft 365 event belongs to the organizer and cannot be answered as an invitation.");
-    }
-
     // Prefer the PARTSTAT captured directly from Thunderbird's invited
     // attendee object. itemToPlain() remains the fallback for older builds.
     const responseAction =
@@ -2422,6 +2556,23 @@ async function nativeCreateHandler(calendar, item, options = {}) {
       M365_NATIVE.responseActionForUser(item, ownAddresses);
     if (!responseAction) {
       throw new Error("Invitation operation has no Accept/Tentative/Decline attendee state; no message was sent and no new meeting was created.");
+    }
+
+    const match = await findEventForInvitationWithRetry(invitation, {
+      cachedGraphEventId: String(options?.cachedGraphEventId || ""),
+      calendarId: calendar.graphCalendarId
+    });
+    if (!match?.event?.id) {
+      // V2.43 split-mail fallback: the iTIP message may have arrived in a
+      // non-Microsoft IMAP mailbox (for example one.com), so Exchange Online
+      // never received/created the attendee event. Create or update a PERSONAL
+      // Graph copy without attendees and let Thunderbird send the iMIP RSVP
+      // through the mail identity that received the invitation. Never recreate
+      // the original attendee list in Graph: that would make the user organizer.
+      return createOrUpdateExternalImipFallback(calendar, item, options, invitation, responseAction);
+    }
+    if (match.event.isOrganizer) {
+      throw new Error("The matched Microsoft 365 event belongs to the organizer and cannot be answered as an invitation.");
     }
 
     await respondEvent({

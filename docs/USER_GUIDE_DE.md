@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.39
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.43
 
 Build: **GITHUB / NATIVE**
 
@@ -147,3 +147,8 @@ Oberhalb des Kalenders kann zwischen **Monat**, **Woche**, **Tag** und **Agenda*
 ## V2.36: Erinnerung „Verwerfen“ und „Schlummern“ bleiben lokal
 
 Thunderbird ändert beim Verwerfen oder Schlummern einer Erinnerung nur lokale Alarmdaten. V2.36 erkennt diese Änderungen vor jedem Microsoft-Graph-Schreibzugriff. **Verwerfen** und **Schlummern** zeigen daher keine Versandbestätigung und können kein Meeting-Update versenden. Eine echte Änderung des Erinnerungsvorlaufs (z. B. 15 auf 30 Minuten) bleibt dagegen eine Kalenderänderung und wird synchronisiert.
+
+
+## V2.43 – Split-Mail / externe Einladungen
+
+Wenn normale E-Mail bei one.com verbleibt, Teams-/Kalendernachrichten aber über Exchange Online verarbeitet werden sollen, siehe [one.com + Exchange Online Calendar Relay](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md). Die Microsoft-Entra-App-Registrierung ist separat unter [Microsoft Entra Setup](setup/MICROSOFT_ENTRA_SETUP_DE.md) dokumentiert.

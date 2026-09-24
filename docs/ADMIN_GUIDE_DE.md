@@ -1,4 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.39
+# Administratoranleitung – M365 Calendar for Thunderbird V2.43
 
 Build: **GITHUB / NATIVE**
 
@@ -195,3 +195,8 @@ Die Live-Teilnehmersuche beendet sich bereits nach einem Treffer aus `contacts.q
 ## V2.27: Adressbücher für Teilnehmer-Vorschläge
 
 In **Microsoft 365 → Zahnrad → Einstellungen** können unter **Adressbücher für Teilnehmer-Vorschläge** ein oder mehrere Thunderbird-Adressbücher ausgewählt werden. Die Auswahl begrenzt die Live-Vorschläge im Teilnehmerfeld und kann große alte/gesammelte Adressbücher von der Suche ausschließen.
+
+
+## V2.43 – Split-Mail / externe Einladungen
+
+Wenn normale E-Mail bei one.com verbleibt, Teams-/Kalendernachrichten aber über Exchange Online verarbeitet werden sollen, siehe [one.com + Exchange Online Calendar Relay](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md). Die Microsoft-Entra-App-Registrierung ist separat unter [Microsoft Entra Setup](setup/MICROSOFT_ENTRA_SETUP_DE.md) dokumentiert.

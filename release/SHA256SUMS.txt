@@ -1,2 +1,0 @@
-01221163508031777768d7e0cd93dfe92012a4b7b8e24ce97f0e0bac2174c2c3  release/M365_Thunderbird_Calendar_V2.36_NATIVE.xpi
-dc8abb29f03336960d31217e860707ef575b5a02009a02d34030ce1de57c5080  release/M365_Thunderbird_Calendar_V2.36_STANDARD.xpi

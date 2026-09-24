@@ -186,12 +186,14 @@
     const joinUrl = extractTeamsJoinUrl(event);
     const webLink = cleanString(event?.webLink);
     const isOnlineMeeting = Boolean(event?.isOnlineMeeting || joinUrl);
+    const categories = Array.isArray(event?.categories) ? event.categories.map(cleanString).filter(Boolean) : [];
+    const isExternalImipCopy = categories.some(value => value.toLowerCase() === "external imip invitation");
     // V2.27: a personal Microsoft 365 appointment is still owned by the
     // signed-in user. Keep the Graph organizer in the neutral mapping. The
     // privileged Thunderbird mirror may add a synthetic accepted self-attendee
     // purely for rendering, but that synthetic attendee is stripped again when
     // an appointment is written back to Graph.
-    const isAppointment = attendees.length === 0 && !isOnlineMeeting;
+    const isAppointment = (attendees.length === 0 && !isOnlineMeeting) || isExternalImipCopy;
     const organizer = graphOrganizerToNative(event?.organizer);
     const showAs = cleanString(event?.showAs).toLowerCase();
     const sensitivity = cleanString(event?.sensitivity).toLowerCase();
@@ -209,7 +211,7 @@
       status: event?.isCancelled ? "CANCELLED" : "CONFIRMED",
       privacy: sensitivity === "private" ? "PRIVATE" : sensitivity === "confidential" ? "CONFIDENTIAL" : "PUBLIC",
       transparency: showAs === "free" ? "TRANSPARENT" : "OPAQUE",
-      categories: Array.isArray(event?.categories) ? event.categories.map(cleanString).filter(Boolean) : [],
+      categories,
       organizer,
       attendees,
       reminderMinutes: event?.isReminderOn && Number.isFinite(Number(event?.reminderMinutesBeforeStart))
