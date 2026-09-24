@@ -6,8 +6,6 @@ Start here if you are installing or administering **M365 Calendar for Thunderbir
 
 - [Microsoft Entra / Microsoft Graph application setup (DE)](setup/MICROSOFT_ENTRA_SETUP_DE.md)
 - [Microsoft Entra / Microsoft Graph application setup (EN)](setup/MICROSOFT_ENTRA_SETUP_EN.md)
-- [one.com + Exchange Online calendar relay / split-mail setup (DE)](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md)
-- [one.com + Exchange Online calendar relay / split-mail setup (EN)](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_EN.md)
 
 ## Operation
 

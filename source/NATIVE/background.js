@@ -2563,8 +2563,8 @@ async function nativeCreateHandler(calendar, item, options = {}) {
       calendarId: calendar.graphCalendarId
     });
     if (!match?.event?.id) {
-      // V2.43 split-mail fallback: the iTIP message may have arrived in a
-      // non-Microsoft IMAP mailbox (for example one.com), so Exchange Online
+      // External-iMIP fallback: the iTIP message may have arrived in a
+      // non-Microsoft mail account, so Exchange Online
       // never received/created the attendee event. Create or update a PERSONAL
       // Graph copy without attendees and let Thunderbird send the iMIP RSVP
       // through the mail identity that received the invitation. Never recreate

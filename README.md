@@ -16,51 +16,40 @@ Open-source Microsoft 365 / Exchange Online calendar integration for Mozilla Thu
 
 | Edition | Native Thunderbird Calendar | Experiment API | Intended use |
 |---|---:|---:|---|
-| **NATIVE** | Yes | Yes | Recommended full integration |
-| **STANDARD** | No | No | Graph/M365 Space fallback |
-| **INTERNAL NATIVE** | Yes | Yes | Preconfigured internal deployment |
-| **INTERNAL STANDARD** | No | No | Preconfigured internal fallback |
+| **NATIVE** | Yes | Yes | Full integration with Thunderbird's built-in Calendar |
+| **STANDARD** | No | No | Microsoft 365 Space / Graph integration without a privileged Experiment API |
+| **ATN NATIVE** | Yes | Yes | NATIVE package prepared for addons.thunderbird.net review/distribution |
 
-Public IDs:
+Public add-on IDs:
 
-- NATIVE: `m365-calendar-for-thunderbird@3-5pe.com`
+- NATIVE / ATN NATIVE: `m365-calendar-for-thunderbird@3-5pe.com`
 - STANDARD: `m365-calendar-standard@3-5pe.com`
 
-Thunderbird **ESR is recommended for production**. GitHub/INTERNAL NATIVE builds are uncapped; the ATN Experiment package carries the validated ATN maximum (`156.*`).
+Thunderbird **ESR is recommended for production**. The GitHub NATIVE package is not artificially capped with `strict_max_version`; the ATN Experiment package carries the validated ATN maximum (`156.*`).
 
 ## Highlights
 
 - Microsoft Graph calendar synchronization
-- Native Thunderbird calendar provider (NATIVE)
-- Create/edit events and Teams meetings
+- Native Thunderbird calendar provider (NATIVE / ATN NATIVE)
+- Create and edit events and Microsoft Teams meetings
 - Accept / Tentative / Decline meeting requests
 - Recurring events and exceptions
 - Thunderbird address-book attendee suggestions
 - Microsoft 365 Month / Week / Day / Agenda Space
 - Outgoing meeting-message confirmation
 - Diagnostic export and native-provider diagnostics
-- **Split-mail support (introduced in V2.42):** safe handling of external iMIP invitations received through a non-Microsoft IMAP mailbox
-
-## one.com + Exchange Online split mail
-
-The split-mail support introduced in V2.42 is designed for deployments where normal mail remains at a third-party provider such as **one.com**, while Teams/calendar processing runs through Exchange Online.
-
-The preferred production architecture follows Microsoft's documented third-party-mail model: keep the existing MX, dual-deliver/forward inbound mail to Exchange Online, process `Calendaring` messages there and discard the forwarded non-calendar copy. This allows ordinary IMAP/SMTP mail to remain at one.com while meeting requests and responses populate the Microsoft 365 calendar.
-
-The NATIVE edition also contains an optional safety fallback for an unmatched external iMIP request: it creates a **personal M365 copy without attendees** and lets Thunderbird send the RSVP through the receiving mail identity. It never recreates the invitation as a new Graph meeting with the original attendee list.
-
-**Setup guide:** [one.com + Exchange Online calendar relay](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md)
+- Optional safe fallback for external iMIP invitations that are received by Thunderbird before a corresponding Exchange event is available
 
 ## Quick start
 
-1. Install NATIVE (or STANDARD if Experiment APIs are not desired).
+1. Install **NATIVE** for full Thunderbird Calendar integration, or **STANDARD** if you do not want to use the Experiment API.
 2. Open **Settings & diagnostics**.
 3. Copy the displayed OAuth redirect URI.
-4. Create a Microsoft Entra SPA app and add the delegated Graph permissions.
-5. Enter **Application (Client) ID** and **Directory (tenant) ID**.
+4. Create a Microsoft Entra SPA application and add the required delegated Microsoft Graph permissions.
+5. Enter the **Application (Client) ID** and **Directory (tenant) ID** in the add-on.
 6. Select **Microsoft login**.
 
-Detailed Entra setup: [German](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) · [English](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md)
+Detailed Microsoft Entra setup: [German](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) · [English](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md)
 
 ## Documentation
 
@@ -70,14 +59,13 @@ Start with the [documentation index](docs/README.md).
 |---|---|---|
 | User guide | [DE](docs/USER_GUIDE_DE.md) | [EN](docs/USER_GUIDE_EN.md) |
 | Administrator guide | [DE](docs/ADMIN_GUIDE_DE.md) | [EN](docs/ADMIN_GUIDE_EN.md) |
-| Entra app setup | [DE](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) | [EN](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md) |
-| one.com / Exchange calendar relay | [DE](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_DE.md) | [EN](docs/setup/ONECOM_EXCHANGE_CALENDAR_RELAY_EN.md) |
+| Microsoft Entra app setup | [DE](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) | [EN](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md) |
 
 Also see [Permissions](docs/PERMISSIONS.md), [Compatibility](docs/COMPATIBILITY.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Changelog](CHANGELOG.md) and [V2.43 release notes](docs/releases/V2.43.md).
 
-## Microsoft Entra permissions
+## Microsoft Entra configuration
 
-The public build contains no tenant-specific Client ID. Configure your own Entra SPA registration with delegated access required by the add-on, including `User.Read`, `Calendars.ReadWrite` and `Calendars.ReadWrite.Shared`, plus the OIDC/OAuth scopes used for login and refresh tokens.
+The public distributions do not ship with a Microsoft Entra Client ID or tenant ID. Configure your own SPA application registration with delegated access required by the add-on, including `User.Read`, `Calendars.ReadWrite` and `Calendars.ReadWrite.Shared`, plus the OIDC/OAuth scopes used for sign-in and refresh tokens.
 
 No client secret is used or required.
 

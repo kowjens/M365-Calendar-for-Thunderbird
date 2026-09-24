@@ -39,7 +39,7 @@ Output:
 
 - `release/M365_Thunderbird_Calendar_V2.43_ATN_NATIVE.xpi`
 
-The ATN package is built from the same NATIVE source, but the build injects `strict_max_version: 156.*` into the packaged manifest because Thunderbird's Experiment-specific review/linting requires a maximum version. A generic Firefox-oriented validator may still describe the field as unnecessary; that warning is not used to remove the Experiment cap. The source manifest itself remains uncapped so GitHub and internal/test deployments continue to work on newer Monthly releases for compatibility testing.
+The ATN package is built from the same NATIVE source, but the build injects `strict_max_version: 156.*` into the packaged manifest because Thunderbird's Experiment-specific review/linting requires a maximum version. A generic Firefox-oriented validator may still describe the field as unnecessary; that warning is not used to remove the Experiment cap. The source manifest itself remains uncapped so GitHub builds can continue to be tested on newer Monthly releases for compatibility testing.
 
 The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. This makes reviewer/source reproduction easier.
 

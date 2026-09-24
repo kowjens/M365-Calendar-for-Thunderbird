@@ -41,7 +41,7 @@ Thunderbird can process an iTIP invitation before the associated Exchange event 
 
 ## Thunderbird Monthly update: settings/buttons or native calendar appear unresponsive
 
-V2.38 introduced a standalone diagnostics/options page after a Thunderbird 156 system showed a state where the Experiment namespace appeared loaded while settings, native buttons and calendar integration were unresponsive. A manifest maximum alone does **not** prove the runtime root cause if the add-on is actually loaded. V2.39 therefore avoids an artificial maximum in GitHub/INTERNAL builds and treats such cases as real runtime compatibility issues that need diagnostics.
+V2.38 introduced a standalone diagnostics/options page after a Thunderbird 156 system showed a state where the Experiment namespace appeared loaded while settings, native buttons and calendar integration were unresponsive. A manifest maximum alone does **not** prove the runtime root cause if the add-on is actually loaded. V2.39 therefore avoids an artificial maximum in GitHub builds and treats such cases as real runtime compatibility issues that need diagnostics.
 
 Open **Add-ons and Themes → M365 Calendar for Thunderbird → Preferences/Options** and capture:
 

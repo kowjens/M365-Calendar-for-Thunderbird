@@ -1,8 +1,8 @@
 # Administrator Guide – M365 Calendar for Thunderbird V2.43
 
-Build: **GITHUB / NATIVE**
+Applies to the public **NATIVE, STANDARD and ATN NATIVE editions**.
 
-Client ID and tenant are intentionally blank in this GITHUB build and must be entered once in the add-on settings.
+Client ID and tenant are entered by the administrator or user in the add-on settings.
 
 ## 1. Register the Microsoft Entra application
 
@@ -13,7 +13,7 @@ The menu labels below were checked against current Microsoft Learn documentation
 3. Menu path:
    **Entra ID → App registrations → New registration**
 4. Enter a name, for example **M365 Calendar for Thunderbird**.
-5. Under **Supported account types**, an internal company deployment normally uses:
+5. Under **Supported account types**, a single-tenant deployment normally uses:
    **Accounts in this organizational directory only (Single tenant)**.
 6. Select **Register**.
 7. On **Overview**, record:
@@ -74,13 +74,7 @@ Microsoft references:
 
 ## 4. Configure the add-on
 
-### INTERNAL
-
-The INTERNAL build is preconfigured. Administrators should still verify the values under **Microsoft 365 → ⚙ Settings**.
-
-### GITHUB
-
-For the neutral GITHUB build, enter under **Microsoft 365 → ⚙ Settings**:
+Under **Microsoft 365 → ⚙ Settings**, enter:
 
 - **Application (Client) ID**
 - **Tenant**: Directory (tenant) ID or `*.onmicrosoft.com`
@@ -197,6 +191,3 @@ Live attendee search returns as soon as `contacts.quickSearch()` yields a match.
 Under **Microsoft 365 → gear → Settings**, one or more Thunderbird address books can be selected under **Address books for attendee suggestions**. The selection limits live attendee lookup and can exclude large legacy/collected address books.
 
 
-## V2.43 – split mail / external invitations
-
-For deployments that keep ordinary email at one.com while Exchange Online processes Teams/calendar traffic, see [one.com + Exchange Online calendar relay](setup/ONECOM_EXCHANGE_CALENDAR_RELAY_EN.md). Microsoft Entra registration is documented in [Microsoft Entra setup](setup/MICROSOFT_ENTRA_SETUP_EN.md).

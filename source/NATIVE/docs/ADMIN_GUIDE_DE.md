@@ -1,8 +1,8 @@
 # Administratoranleitung – M365 Calendar for Thunderbird V2.43
 
-Build: **GITHUB / NATIVE**
+Gilt für die öffentlichen **NATIVE-, STANDARD- und ATN-NATIVE-Editionen**.
 
-Client-ID und Tenant sind in diesem GITHUB-Build absichtlich leer und müssen einmalig in den Add-on-Einstellungen eingetragen werden.
+Client-ID und Tenant werden vom Administrator bzw. Benutzer in den Add-on-Einstellungen eingetragen.
 
 ## 1. Microsoft-Entra-App registrieren
 
@@ -13,7 +13,7 @@ Die folgenden Menübezeichnungen wurden am **20.08.2026** gegen die aktuelle Mic
 3. Menüfolge:
    **Entra ID → App-Registrierungen → Neue Registrierung**
 4. Einen Namen vergeben, z. B. **M365 Calendar for Thunderbird**.
-5. Unter **Unterstützte Kontotypen** für eine interne Firmeninstallation normalerweise wählen:
+5. Unter **Unterstützte Kontotypen** für eine Einzelmandanten-Installation normalerweise wählen:
    **Nur Konten in diesem Organisationsverzeichnis (Einzelner Mandant)**.
 6. **Registrieren** anklicken.
 7. Auf **Übersicht** die folgenden Werte notieren:
@@ -74,13 +74,7 @@ Microsoft-Referenzen:
 
 ## 4. Add-on konfigurieren
 
-### INTERNAL
-
-Die vorkonfigurierte INTERNAL-Fassung kann normalerweise direkt verwendet werden. Trotzdem sollten Admins die Werte unter **Microsoft 365 → ⚙ Einstellungen** kontrollieren.
-
-### GITHUB
-
-Bei der neutralen GITHUB-Fassung unter **Microsoft 365 → ⚙ Einstellungen** eintragen:
+Unter **Microsoft 365 → ⚙ Einstellungen** eintragen:
 
 - **Application (Client) ID**
 - **Tenant**: Directory (tenant) ID oder `*.onmicrosoft.com`

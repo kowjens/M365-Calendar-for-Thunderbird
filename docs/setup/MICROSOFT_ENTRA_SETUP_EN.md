@@ -1,6 +1,6 @@
 # Microsoft Entra application setup
 
-The public GitHub/ATN builds use a bring-your-own Microsoft Entra app registration. No client secret is required.
+The public NATIVE, STANDARD and ATN NATIVE editions use a bring-your-own Microsoft Entra app registration. No client secret is required.
 
 ## Register the application
 

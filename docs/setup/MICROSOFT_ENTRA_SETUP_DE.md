@@ -1,6 +1,6 @@
 # Microsoft Entra App für M365 Calendar for Thunderbird einrichten
 
-Diese Anleitung beschreibt die **Bring-your-own-app**-Einrichtung für die öffentliche GitHub-/ATN-Version. Die INTERNAL-Builds können Client-ID und Tenant bereits vorbelegen.
+Diese Anleitung beschreibt die **Bring-your-own-app**-Einrichtung für die öffentlichen NATIVE-, STANDARD- und ATN-NATIVE-Editionen.
 
 ## Benötigte Werte
 
@@ -16,7 +16,7 @@ Zusätzlich muss der **exakte OAuth redirect URI** aus den Add-on-Einstellungen 
 1. Microsoft Entra Admin Center öffnen: https://entra.microsoft.com/
 2. **Identity → Applications → App registrations → New registration**.
 3. Name, z. B. `M365 Calendar for Thunderbird`.
-4. Für eine nur intern genutzte Firmen-App: **Accounts in this organizational directory only** wählen.
+4. Für eine App, die nur im eigenen Microsoft-365-Mandanten verwendet wird: **Accounts in this organizational directory only** wählen.
 5. **Register**.
 6. Auf **Overview** notieren:
    - **Application (client) ID**

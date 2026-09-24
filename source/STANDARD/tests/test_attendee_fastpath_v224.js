@@ -10,7 +10,7 @@ const sandbox={
   console,
   browser:{
     permissions:{contains:async()=>true},
-    contacts:{quickSearch:async()=>[{id:'1',properties:{DisplayName:'Volker Dudek',PrimaryEmail:'volker.dudek@3-5pe.com'}}]},
+    contacts:{quickSearch:async()=>[{id:'1',properties:{DisplayName:'Alex Example',PrimaryEmail:'alex@example.com'}}]},
     addressBooks:{list:async()=>{enumerationCalled++; throw new Error('enumeration must not run on quick hit');}}
   },
   getConfig:async()=>({contactAddressBookIds:['*']}),
@@ -20,9 +20,9 @@ const sandbox={
 vm.createContext(sandbox);
 vm.runInContext(bg.slice(start,end)+'\nthis.searchContacts=searchContacts; this.diag=contactSearchDiagnosticsState;',sandbox);
 (async()=>{
-  const result=await sandbox.searchContacts('volker.dudek@3-5pe.com');
+  const result=await sandbox.searchContacts('alex@example.com');
   assert.strictEqual(result.length,1);
-  assert.strictEqual(result[0].email,'volker.dudek@3-5pe.com');
+  assert.strictEqual(result[0].email,'alex@example.com');
   assert.strictEqual(nativeCalled,0);
   assert.strictEqual(enumerationCalled,0);
   assert.strictEqual(sandbox.diag.earlyReturn,'quickSearch');

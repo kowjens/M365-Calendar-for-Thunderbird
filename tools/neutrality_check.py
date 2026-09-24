@@ -5,6 +5,16 @@ ROOT=Path(__file__).resolve().parents[1]
 PUBLIC_IDS={'NATIVE':'m365-calendar-for-thunderbird@3-5pe.com','STANDARD':'m365-calendar-standard@3-5pe.com'}
 AUTHOR='Jens Kowalsky, 3-5 Power Electronics GmbH'
 BANNED_DOMAIN = '35pwr' + '.com'
+PUBLIC_REPO_BANNED_LITERALS = {
+    'internal' + ' native',
+    'internal' + ' standard',
+    'github/' + 'internal',
+    'github / ' + 'internal',
+    'internal' + ' build',
+    'internal' + '-build',
+    'one' + '.com',
+    'onecom' + '_exchange',
+}
 for variant in ['STANDARD','NATIVE']:
     src=ROOT/'source'/variant
     cfg=(src/'config/build-config.js').read_text(encoding='utf-8')
@@ -28,7 +38,12 @@ for f in ROOT.rglob('*'):
         text=f.read_text(encoding='utf-8')
     except (UnicodeDecodeError, OSError):
         continue
-    if BANNED_DOMAIN.lower() in text.lower():
+    lower = text.lower()
+    if BANNED_DOMAIN.lower() in lower:
         print(f'Obsolete domain reference in {f.relative_to(ROOT)}')
         sys.exit(1)
+    for literal in PUBLIC_REPO_BANNED_LITERALS:
+        if literal in lower:
+            print(f'Private/deployment-specific public-repository reference {literal!r} in {f.relative_to(ROOT)}')
+            sys.exit(1)
 print('Neutral public-build check passed.')

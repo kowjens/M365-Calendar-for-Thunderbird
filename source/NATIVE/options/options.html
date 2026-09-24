@@ -36,7 +36,7 @@
         <label class="check"><input id="confirmOutgoingMessages" type="checkbox"> Confirm outgoing meeting messages</label>
         <label class="check"><input id="externalImipFallback" type="checkbox"> External email invitation fallback (iMIP → personal M365 copy)</label>
       </div>
-      <p class="muted">External iMIP fallback is intended for split-mail setups where ordinary email stays outside Microsoft 365. A matched Exchange invitation still uses Graph RSVP; an unmatched email invitation is stored as a personal M365 copy and its RSVP is sent by Thunderbird through the receiving mail identity.</p>
+      <p class="muted">External iMIP fallback is intended for invitations received by Thunderbird before a matching Exchange event is available. A matched Exchange invitation still uses Graph RSVP; an unmatched invitation is stored as a personal M365 copy and its RSVP is sent by Thunderbird through the receiving mail identity.</p>
       <label>OAuth redirect URI<div class="copy-row"><input id="redirectUri" type="text" readonly><button id="copyRedirect" type="button">Copy</button></div></label>
       <div class="actions"><button id="save" type="button" class="primary">Save settings</button><button id="login" type="button">Microsoft login</button><button id="logout" type="button">Logout</button></div>
       <p id="saveStatus" class="muted"></p>

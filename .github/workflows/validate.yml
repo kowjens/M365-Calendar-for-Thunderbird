@@ -24,7 +24,7 @@ jobs:
         run: python tools/version_check.py
       - name: Syntax and regression tests
         run: python tools/run_tests.py
-      - name: Public neutrality and ATN checks
+      - name: Public repository hygiene, neutrality and ATN checks
         run: |
           python tools/neutrality_check.py
           python tools/atn_check.py

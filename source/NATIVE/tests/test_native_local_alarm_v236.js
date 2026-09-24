@@ -17,8 +17,8 @@ const base = {
   categories: ["Sales"],
   reminderMinutes: 15,
   attendees: [
-    { address: "volker.dudek@3-5pe.com", name: "Volker", role: "REQ-PARTICIPANT", status: "ACCEPTED", type: "INDIVIDUAL" },
-    { address: "jens.kowalsky@3-5pe.com", name: "Jens", role: "REQ-PARTICIPANT", status: "ACCEPTED", type: "INDIVIDUAL" }
+    { address: "alex@example.com", name: "Alex", role: "REQ-PARTICIPANT", status: "ACCEPTED", type: "INDIVIDUAL" },
+    { address: "casey@example.com", name: "Casey", role: "REQ-PARTICIPANT", status: "ACCEPTED", type: "INDIVIDUAL" }
   ]
 };
 
