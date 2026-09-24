@@ -6,17 +6,18 @@
 - Node.js 22+ for JavaScript syntax/regression tests
 - Thunderbird for manual integration testing
 
-No npm install step and no generated/minified JavaScript are required.
+No npm dependency is required to build the add-on. First-party JavaScript/HTML/CSS is shipped human-readable: there is no transpilation, minification, obfuscation, template compilation or JavaScript bundling.
 
 ## Validate
 
 ```bash
+python tools/version_check.py
 python tools/run_tests.py
 python tools/neutrality_check.py
 python tools/atn_check.py
 ```
 
-## Build GitHub / general-use XPIs
+## Build GitHub editions
 
 ```bash
 python tools/build_xpi.py --all
@@ -24,12 +25,10 @@ python tools/build_xpi.py --all
 
 Outputs:
 
-- `release/M365_Thunderbird_Calendar_V2.43_NATIVE.xpi`
-- `release/M365_Thunderbird_Calendar_V2.43_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.44_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.44_NATIVE.xpi`
 
-The GitHub NATIVE package deliberately has **no `strict_max_version`**. ESR is recommended for production, but normal Thunderbird Monthly releases are not blocked by an artificial manifest ceiling.
-
-## Build the ATN NATIVE XPI
+## Build the ATN STANDARD edition
 
 ```bash
 python tools/build_xpi.py --atn
@@ -37,10 +36,23 @@ python tools/build_xpi.py --atn
 
 Output:
 
-- `release/M365_Thunderbird_Calendar_V2.43_ATN_NATIVE.xpi`
+- `release/M365_Thunderbird_Calendar_V2.44_ATN_STANDARD.xpi`
 
-The ATN package is built from the same NATIVE source, but the build injects `strict_max_version: 156.*` into the packaged manifest because Thunderbird's Experiment-specific review/linting requires a maximum version. A generic Firefox-oriented validator may still describe the field as unnecessary; that warning is not used to remove the Experiment cap. The source manifest itself remains uncapped so GitHub builds can continue to be tested on newer Monthly releases for compatibility testing.
+The ATN artifact is packaged from the same human-readable `source/STANDARD` files as the GitHub STANDARD artifact. The build does **not** rewrite the manifest, source code or permissions. It only creates a deterministic ZIP/XPI with fixed ZIP metadata. Consequently the STANDARD and ATN_STANDARD XPI payloads are byte-identical; only the output filename differs.
 
-The build is deterministic: XPI entries are sorted and use fixed ZIP metadata. This makes reviewer/source reproduction easier.
+The ATN STANDARD edition contains **no `experiment_apis` entry and no `experiments/` directory**. The deeper GITHUB NATIVE edition is not submitted to ATN while new custom Experiment API submissions are paused.
 
-See `docs/COMPATIBILITY.md` for the release-channel policy.
+## Official Thunderbird webext-linter
+
+GitHub Actions clones the current official `thunderbird/webext-linter`, installs its pinned dependencies with `npm ci`, and runs it against the ATN_STANDARD XPI. The linter itself requires Node.js 20 or newer.
+
+Equivalent manual check:
+
+```bash
+git clone --depth 1 https://github.com/thunderbird/webext-linter.git
+cd webext-linter
+npm ci
+node verify.js ../M365-Calendar-for-Thunderbird/release/M365_Thunderbird_Calendar_V2.44_ATN_STANDARD.xpi
+```
+
+See `docs/COMPATIBILITY.md` and `PUBLISHING_V2.44.md`.

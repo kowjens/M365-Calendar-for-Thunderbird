@@ -1,6 +1,6 @@
 # Microsoft Entra App für M365 Calendar for Thunderbird einrichten
 
-Diese Anleitung beschreibt die **Bring-your-own-app**-Einrichtung für die öffentlichen NATIVE-, STANDARD- und ATN-NATIVE-Editionen.
+Diese Anleitung beschreibt die **Bring-your-own-app**-Einrichtung für die öffentlichen GITHUB-NATIVE-, GITHUB-STANDARD- und ATN-STANDARD-Editionen.
 
 ## Benötigte Werte
 

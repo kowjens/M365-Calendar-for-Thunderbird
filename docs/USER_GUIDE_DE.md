@@ -1,4 +1,4 @@
-# Benutzeranleitung – M365 Calendar for Thunderbird V2.43
+# Benutzeranleitung – M365 Calendar for Thunderbird V2.44
 
 Build: **GITHUB / NATIVE**
 
@@ -149,6 +149,6 @@ Oberhalb des Kalenders kann zwischen **Monat**, **Woche**, **Tag** und **Agenda*
 Thunderbird ändert beim Verwerfen oder Schlummern einer Erinnerung nur lokale Alarmdaten. V2.36 erkennt diese Änderungen vor jedem Microsoft-Graph-Schreibzugriff. **Verwerfen** und **Schlummern** zeigen daher keine Versandbestätigung und können kein Meeting-Update versenden. Eine echte Änderung des Erinnerungsvorlaufs (z. B. 15 auf 30 Minuten) bleibt dagegen eine Kalenderänderung und wird synchronisiert.
 
 
-## V2.43 – externe iMIP-Einladungen
+## Externe iMIP-Einladungen
 
 Die NATIVE-Edition kann optional Einladungen behandeln, die Thunderbird als iMIP-Nachricht empfängt, bevor ein passendes Exchange-Ereignis verfügbar ist. Wenn ein passendes Exchange-Ereignis existiert, bleibt Microsoft Graph der normale RSVP-Pfad.

@@ -7,7 +7,7 @@ labels: bug
 
 ## Environment
 - Thunderbird version:
-- Add-on edition: STANDARD / NATIVE
+- Add-on edition: ATN STANDARD / GITHUB STANDARD / GITHUB NATIVE
 - Add-on version:
 - OS:
 
@@ -25,5 +25,5 @@ For NATIVE calendar issues, paste the complete **Native diagnostics** block from
 
 - Thunderbird channel: ESR / Monthly / Beta
 - Thunderbird version:
-- Add-on edition: NATIVE / STANDARD
+- Add-on edition: GITHUB NATIVE / GITHUB STANDARD / ATN STANDARD
 - Add-on version:

@@ -1,6 +1,6 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.43
+# Administratoranleitung – M365 Calendar for Thunderbird V2.44
 
-Gilt für die öffentlichen **NATIVE-, STANDARD- und ATN-NATIVE-Editionen**.
+Gilt für die öffentlichen **GITHUB-NATIVE-, GITHUB-STANDARD- und ATN-STANDARD-Editionen**.
 
 Client-ID und Tenant werden vom Administrator bzw. Benutzer in den Add-on-Einstellungen eingetragen.
 
@@ -86,7 +86,7 @@ Anschließend **Speichern** und **Microsoft Login** ausführen.
 - **STANDARD**: Microsoft-365-Space, Graph-Kalender, Teams-Termine und Einladungsfunktionen; **keine** native Thunderbird-Kalenderintegration und keine privilegierte Experiment-API.
 - **NATIVE**: zusätzlich echte M365-Kalender in Thunderbirds normaler Kalenderansicht. Dafür verwendet die Erweiterung eine privilegierte Thunderbird Experiment API.
 
-Die öffentlichen NATIVE- und STANDARD-Editionen verwenden getrennte stabile Add-on-IDs. Die für addons.thunderbird.net vorgesehene NATIVE-Edition nutzt `m365-calendar-for-thunderbird@3-5pe.com`; STANDARD nutzt `m365-calendar-standard@3-5pe.com`.
+Die öffentlichen Editionen verwenden je Integrationsmodus getrennte stabile Add-on-IDs. **ATN STANDARD / GITHUB STANDARD** verwenden `m365-calendar-standard@3-5pe.com`; **GITHUB NATIVE** verwendet `m365-calendar-for-thunderbird@3-5pe.com`. Dadurch kann die Store-STANDARD-Edition eine separat installierte NATIVE-Edition nicht ersetzen.
 
 ## 6. Native Kalenderintegration und Diagnose
 

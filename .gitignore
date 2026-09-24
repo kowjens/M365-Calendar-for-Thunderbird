@@ -9,3 +9,5 @@ release-ci/
 Thumbs.db
 .vscode/
 .idea/
+
+release/

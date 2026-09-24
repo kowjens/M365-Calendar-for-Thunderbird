@@ -1,7 +1,7 @@
 {
   "name": "m365-calendar-for-thunderbird",
-  "version": "2.0.43",
-  "description": "Microsoft 365 / Exchange Online calendar and Teams integration for Thunderbird, including optional native calendar integration and external iMIP invitation handling.",
+  "version": "2.0.44",
+  "description": "Microsoft 365 / Exchange Online calendar and Teams integration for Thunderbird with public STANDARD and NATIVE editions.",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "license": "MPL-2.0",
   "private": true,

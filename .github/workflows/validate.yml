@@ -10,7 +10,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -24,11 +24,20 @@ jobs:
         run: python tools/version_check.py
       - name: Syntax and regression tests
         run: python tools/run_tests.py
-      - name: Public repository hygiene, neutrality and ATN checks
+      - name: Public repository hygiene and ATN preflight
         run: |
           python tools/neutrality_check.py
           python tools/atn_check.py
-      - name: Build public and ATN XPIs
+      - name: Build public GitHub XPIs
+        run: python tools/build_xpi.py --all
+      - name: Build ATN STANDARD XPI
+        run: python tools/build_xpi.py --atn
+      - name: Validate packaged editions
+        run: python tools/package_check.py
+      - name: Official Thunderbird webext-linter - ATN STANDARD
+        shell: bash
         run: |
-          python tools/build_xpi.py --all
-          python tools/build_xpi.py --atn
+          git clone --depth 1 https://github.com/thunderbird/webext-linter.git "$RUNNER_TEMP/webext-linter"
+          cd "$RUNNER_TEMP/webext-linter"
+          npm ci
+          node verify.js "$GITHUB_WORKSPACE/release/M365_Thunderbird_Calendar_V2.44_ATN_STANDARD.xpi"

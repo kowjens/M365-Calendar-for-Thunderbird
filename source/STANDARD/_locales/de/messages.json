@@ -36,7 +36,7 @@
     "message": "Zuerst Application (Client) ID und Tenant eintragen. Danach kann die Microsoft-Anmeldung gestartet werden."
   },
   "welcomeReady": {
-    "message": "Microsoft 365 ist vorkonfiguriert. Jetzt mit dem Microsoft-365-Konto anmelden."
+    "message": "Konfiguration vollständig. Jetzt mit dem Microsoft-365-Konto anmelden."
   },
   "openSettings": {
     "message": "Einstellungen öffnen"
@@ -115,22 +115,6 @@
   },
   "permissionsList": {
     "message": "User.Read, Calendars.ReadWrite, Calendars.ReadWrite.Shared"
-  },
-  "buildInfoInternal": {
-    "message": "Build: intern vorkonfiguriert · Version $VERSION$",
-    "placeholders": {
-      "version": {
-        "content": "$1"
-      }
-    }
-  },
-  "buildInfoGithub": {
-    "message": "Build: neutral / GitHub · Version $VERSION$",
-    "placeholders": {
-      "version": {
-        "content": "$1"
-      }
-    }
   },
   "signOut": {
     "message": "Abmelden"
@@ -863,13 +847,13 @@
     "message": "Mit nativer Thunderbird-Kalenderintegration über eine privilegierte Experiment-API."
   },
   "nativeStatusStandardBuild": {
-    "message": "Diese XPI ist der STANDARD-Build. Er enthält absichtlich keinen nativen Thunderbird-Kalenderprovider. Für Kalender direkt in Thunderbirds normaler Kalenderansicht bitte den NATIVE-Build installieren."
+    "message": "Diese XPI ist der STANDARD-Build. Sie enthält absichtlich keinen nativen Thunderbird-Kalenderprovider. Die NATIVE-Edition mit tieferer Thunderbird-Kalenderintegration ist über die GitHub-Releases des Projekts verfügbar."
   },
   "buildBannerNative": {
     "message": "NATIVE-Build · native Thunderbird-Kalenderintegration verfügbar"
   },
   "buildBannerStandard": {
-    "message": "STANDARD-Build · keine native Thunderbird-Kalenderintegration – für die normale TB-Kalenderansicht NATIVE installieren"
+    "message": "STANDARD-Build · keine native Thunderbird-Kalenderintegration · NATIVE ist auf GitHub verfügbar"
   },
   "buildBannerNativeDetailed": {
     "message": "NATIVE-Build · Version $VERSION$ · $STATE$",
@@ -1181,5 +1165,13 @@
   },
   "outgoingConfirmationUnavailable": {
     "message": "Die Bestätigung für die ausgehende Nachricht konnte nicht angezeigt werden: $1. Es wurde nichts gesendet."
+  },
+  "buildInfoPublic": {
+    "message": "Build: öffentlich · Version $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
   }
 }

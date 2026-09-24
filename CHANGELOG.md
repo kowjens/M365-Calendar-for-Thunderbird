@@ -1,5 +1,16 @@
 # Changelog
 
+## V2.44 (2026-09-24)
+
+- Changed the addons.thunderbird.net submission from the custom-Experiment NATIVE edition to the Experiment-free STANDARD edition.
+- Kept the deeper NATIVE Thunderbird Calendar integration available through GitHub releases.
+- Separated public add-on IDs so STANDARD/ATN STANDARD and GITHUB NATIVE cannot replace each other through cross-edition updates.
+- Added ATN publication text and reviewer notes that clearly describe the STANDARD limitation and the GitHub NATIVE alternative.
+- Added an ATN package contract check and an official Thunderbird `webext-linter` GitHub Actions step.
+- Removed private-build wording from the public runtime UI and consolidated duplicated variant documentation into the repository-level `docs/` tree.
+- Hardened public-repository hygiene checks for organization-specific configuration, provider-specific deployment material and non-public recipient addresses.
+- No intentional Microsoft Graph/calendar runtime change relative to V2.43; the release primarily changes distribution, publication and repository hygiene.
+
 ## V2.43 (2026-09-24)
 
 - Added a cumulative V2.40/V2.41/V2.42 recovery path and synchronized all current release metadata to V2.43.

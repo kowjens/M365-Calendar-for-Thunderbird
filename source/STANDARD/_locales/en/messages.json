@@ -36,7 +36,7 @@
     "message": "Enter the Application (Client) ID and tenant first. Then you can start the Microsoft sign-in."
   },
   "welcomeReady": {
-    "message": "Microsoft 365 is preconfigured. Sign in with your Microsoft 365 account."
+    "message": "Configuration complete. Sign in with your Microsoft 365 account."
   },
   "openSettings": {
     "message": "Open settings"
@@ -115,22 +115,6 @@
   },
   "permissionsList": {
     "message": "User.Read, Calendars.ReadWrite, Calendars.ReadWrite.Shared"
-  },
-  "buildInfoInternal": {
-    "message": "Build: internally preconfigured · Version $VERSION$",
-    "placeholders": {
-      "version": {
-        "content": "$1"
-      }
-    }
-  },
-  "buildInfoGithub": {
-    "message": "Build: neutral / GitHub · Version $VERSION$",
-    "placeholders": {
-      "version": {
-        "content": "$1"
-      }
-    }
   },
   "signOut": {
     "message": "Sign out"
@@ -863,13 +847,13 @@
     "message": "Includes native Thunderbird calendar integration through a privileged Experiment API."
   },
   "nativeStatusStandardBuild": {
-    "message": "This XPI is the STANDARD build. It intentionally contains no native Thunderbird calendar provider. Install the NATIVE build to show Microsoft 365 calendars in Thunderbird’s normal Calendar view."
+    "message": "This XPI is the STANDARD build. It intentionally contains no native Thunderbird calendar provider. The NATIVE edition with deeper Thunderbird Calendar integration is available from the project GitHub releases."
   },
   "buildBannerNative": {
     "message": "NATIVE build · native Thunderbird calendar integration available"
   },
   "buildBannerStandard": {
-    "message": "STANDARD build · no native Thunderbird calendar integration – install NATIVE for the regular TB calendar view"
+    "message": "STANDARD build · no native Thunderbird calendar integration · NATIVE is available on GitHub"
   },
   "buildBannerNativeDetailed": {
     "message": "NATIVE build · Version $VERSION$ · $STATE$",
@@ -1181,5 +1165,13 @@
   },
   "outgoingConfirmationUnavailable": {
     "message": "The outgoing-message confirmation could not be displayed: $1. Nothing was sent."
+  },
+  "buildInfoPublic": {
+    "message": "Build: public · Version $VERSION$",
+    "placeholders": {
+      "version": {
+        "content": "$1"
+      }
+    }
   }
 }

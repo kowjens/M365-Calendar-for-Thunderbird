@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "2.0.43";
+const VERSION = "2.0.44";
 const CONFIG_SCHEMA_VERSION = 207;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
@@ -798,7 +798,6 @@ async function authStatus() {
     lastSilentAuthError: String(lastSilentAuthError || ""),
     profile: stored.profile || null,
     configured: Boolean(config.clientId && config.tenant),
-    preconfigured: Boolean(BUILD_DEFAULTS.clientId && BUILD_DEFAULTS.tenant),
     buildFlavor: String(BUILD_DEFAULTS.buildFlavor || "github"),
     nativeMode: BUILD_DEFAULTS.nativeMode !== false,
     nativeCapable: Boolean(nativeBridgeState.available),

@@ -9,5 +9,5 @@ labels: enhancement
 
 ## Proposed behavior
 
-## STANDARD / NATIVE relevance
+## ATN STANDARD / GITHUB STANDARD / GITHUB NATIVE relevance
 

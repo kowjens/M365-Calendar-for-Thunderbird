@@ -1,7 +1,8 @@
 # Build Variant
 
-- Version: 2.0.43 / V2.43
+- Version: 2.0.44 / V2.44
 - Distribution: GITHUB
 - Mode: NATIVE
 - Native Thunderbird calendar provider: yes
-- Preconfigured Client ID / tenant: no
+- Custom Experiment API: `nativeCalendar`
+- Predefined Microsoft Entra Client ID / tenant: no

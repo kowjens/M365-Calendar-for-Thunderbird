@@ -1,4 +1,4 @@
-# User Guide – M365 Calendar for Thunderbird V2.43
+# User Guide – M365 Calendar for Thunderbird V2.44
 
 Build: **GITHUB / NATIVE**
 
@@ -149,6 +149,6 @@ Use the buttons above the calendar to switch between **Month**, **Week**, **Day*
 Thunderbird changes local alarm bookkeeping when a reminder is dismissed or snoozed. V2.36 detects these local-only changes before any Microsoft Graph write. **Dismiss** and **Snooze** therefore do not show the outgoing-message confirmation and cannot send a meeting update. Changing the actual reminder offset (for example 15 to 30 minutes) remains a real calendar change and is synchronized.
 
 
-## V2.43 – external iMIP invitations
+## External iMIP invitations
 
 The NATIVE edition can optionally handle invitations that Thunderbird receives as iMIP messages before a matching Exchange event is available. When a matching Exchange event exists, Microsoft Graph remains the normal RSVP path.
