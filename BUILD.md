@@ -25,8 +25,8 @@ python tools/build_xpi.py --all
 
 Outputs:
 
-- `release/M365_Thunderbird_Calendar_V2.48_STANDARD.xpi`
-- `release/M365_Thunderbird_Calendar_V2.48_NATIVE.xpi`
+- `release/M365_Thunderbird_Calendar_V2.49_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.49_NATIVE.xpi`
 
 ## Build the ATN STANDARD edition
 
@@ -36,7 +36,7 @@ python tools/build_xpi.py --atn
 
 Output:
 
-- `release/M365_Thunderbird_Calendar_V2.48_ATN_STANDARD.xpi`
+- `release/M365_Thunderbird_Calendar_V2.49_ATN_STANDARD.xpi`
 
 The ATN artifact is packaged from the same human-readable `source/STANDARD` files as the GitHub STANDARD artifact. The build does **not** rewrite the manifest, source code or permissions. It only creates a deterministic ZIP/XPI with fixed ZIP metadata. Consequently the STANDARD and ATN_STANDARD XPI payloads are byte-identical; only the output filename differs.
 
@@ -52,7 +52,7 @@ Equivalent manual check:
 git clone --depth 1 https://github.com/thunderbird/webext-linter.git
 cd webext-linter
 npm ci
-node verify.js ../M365-Calendar-for-Thunderbird/release/M365_Thunderbird_Calendar_V2.48_ATN_STANDARD.xpi
+node verify.js ../M365-Calendar-for-Thunderbird/release/M365_Thunderbird_Calendar_V2.49_ATN_STANDARD.xpi
 ```
 
 See `docs/COMPATIBILITY.md` and `PUBLISHING.md`.
