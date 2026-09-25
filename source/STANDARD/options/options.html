@@ -19,9 +19,9 @@
         <span>Thunderbird</span><strong id="tbVersion">...</strong>
         <span>Add-on</span><strong id="addonVersion">...</strong>
         <span>Background</span><strong id="backgroundState">checking...</strong>
-        <span>Native Experiment</span><strong id="experimentState">checking...</strong>
-        <span>Native provider</span><strong id="providerState">checking...</strong>
+        <span>Edition</span><strong id="editionState">STANDARD</strong>
       </div>
+      <p class="muted">The STANDARD edition uses only supported WebExtension APIs and does not include the native calendar Experiment API.</p>
       <p id="compatWarning" class="warning hidden"></p>
     </section>
 
@@ -32,18 +32,17 @@
         <label>Tenant<input id="tenant" type="text" autocomplete="off"></label>
         <label>Exchange time zone<input id="timeZone" type="text"></label>
         <label>Automatic sync (minutes)<input id="autoSyncMinutes" type="number" min="0" max="60"></label>
-        <label class="check"><input id="nativeIntegration" type="checkbox"> Enable native Thunderbird calendar integration</label>
         <label class="check"><input id="confirmOutgoingMessages" type="checkbox"> Confirm outgoing meeting messages</label>
       </div>
       <label>OAuth redirect URI<div class="copy-row"><input id="redirectUri" type="text" readonly><button id="copyRedirect" type="button">Copy</button></div></label>
-      <div class="actions"><button id="save" type="button" class="primary">Save settings</button><button id="login" type="button">Microsoft login</button><button id="logout" type="button">Logout</button></div>
+      <div class="actions"><button id="save" type="button" class="primary">Save settings</button><button id="login" type="button">Microsoft login</button><button id="logout" type="button">Logout</button><button id="openSpace" type="button">Open M365 Space</button></div>
       <p id="saveStatus" class="muted"></p>
     </section>
 
-    <section class="card">
-      <h2>Native calendar recovery</h2>
-      <div class="actions"><button id="activateNative" type="button">Activate / register native calendars</button><button id="syncNative" type="button">Synchronize now</button><button id="openSpace" type="button">Open M365 Space</button></div>
-      <p class="muted">These controls are intentionally independent of the M365 Space UI.</p>
+    <section class="card data-disclosure">
+      <h2>Microsoft data transfer</h2>
+      <p>When you configure a Microsoft Entra application/tenant and choose <strong>Microsoft login</strong>, this add-on communicates with Microsoft identity services and Microsoft Graph. Calendar events, attendees, meeting metadata and invitation/contact data required by the features you request may be transmitted to Microsoft. No telemetry or user data is sent to servers operated by the add-on developer.</p>
+      <p class="muted">See the project privacy policy for the full disclosure.</p>
     </section>
 
     <section class="card">

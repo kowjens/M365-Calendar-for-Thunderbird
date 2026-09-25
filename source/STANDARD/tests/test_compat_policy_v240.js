@@ -3,5 +3,6 @@ if(m.browser_specific_settings?.gecko?.strict_max_version) throw new Error('STAN
 if(m.browser_specific_settings?.gecko?.strict_min_version!=='128.0') throw new Error('strict_min_version');
 if(m.options_ui?.page!=='options/options.html') throw new Error('standalone options page missing');
 const js=fs.readFileSync(path.join(root,'options/options.js'),'utf8');
-for(const needle of ['runtime.getBrowserInfo','nativeStatus','declaredMax','runningMajor']) if(!js.includes(needle)) throw new Error('missing '+needle);
-console.log('V2.40 STANDARD compatibility policy/options contract passed');
+for(const needle of ['runtime.getBrowserInfo','editionState','declaredMax','runningMajor']) if(!js.includes(needle)) throw new Error('missing '+needle);
+if(js.includes('browser.nativeCalendar')) throw new Error('STANDARD options must not reference nativeCalendar');
+console.log('V2.49 STANDARD compatibility policy/options contract passed');

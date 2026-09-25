@@ -4,7 +4,7 @@
 
 V2.47 deep diagnostics reproduced this with complete Graph/native data. For the exact affected Multiweek range, Thunderbird's cached wrapper, underlying provider and offline storage returned the same events, and corresponding `calendar-month-day-box-item` objects were found in the Month/Multiweek DOM scan.
 
-V2.48 therefore treats the remaining failure as a Thunderbird Calendar frontend/rendering limitation instead of applying another synchronization rewrite. A forced `refreshItems(true)` did not resolve the symptom in V2.46.
+V2.49 therefore treats the remaining failure as a Thunderbird Calendar frontend/rendering limitation instead of applying another synchronization rewrite. A forced `refreshItems(true)` did not resolve the symptom in V2.46.
 
 **Recommended:** use Day/Week or the add-on's Microsoft 365 Space when event completeness is critical. If reporting the problem, create a diagnostic ZIP before navigating away. See [Known issues](KNOWN_ISSUES.md).
 

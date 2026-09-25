@@ -1048,7 +1048,7 @@ function _m365NativeCreateProviderRuntime() {
 
 
 
-  // V2.48: bounded observation of the real getItems() requests that reach the
+  // V2.49: bounded observation of the real getItems() requests that reach the
   // uncached M365 provider. Recording the arguments is deliberately synchronous
   // and side-effect free. For bounded range queries we additionally issue a
   // read-only mirror query against offlineStorage.getItemsAsArray() when
@@ -3409,7 +3409,7 @@ function _m365NativeCreateProviderRuntime() {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.48//EN",
+      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.49//EN",
       "CALSCALE:GREGORIAN",
       `X-WR-CALNAME:${safeString(calendar?.name || "Microsoft 365").replace(/[\\;,\r\n]/g, " ")}`,
       ...eventBlocks,

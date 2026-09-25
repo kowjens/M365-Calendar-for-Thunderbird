@@ -1,4 +1,4 @@
-# Administratoranleitung – M365 Calendar for Thunderbird V2.48
+# Administratoranleitung – M365 Calendar for Thunderbird V2.49
 
 Gilt für die öffentlichen **GITHUB-NATIVE-, GITHUB-STANDARD- und ATN-STANDARD-Editionen**.
 

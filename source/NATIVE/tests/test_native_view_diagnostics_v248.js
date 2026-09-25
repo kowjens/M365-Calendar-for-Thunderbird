@@ -21,4 +21,4 @@ assert.ok(bg.includes("currentViewWrapperOccurrences"),"summary lacks wrapper oc
 assert.ok(bg.includes("currentViewStorageOccurrences"),"summary lacks storage occurrence count");
 assert.ok(ui.includes('name: "native_current_view.json"'),"diagnostic ZIP lacks current view JSON");
 assert.ok(ui.includes('name: "native_provider_queries.json"'),"diagnostic ZIP lacks provider query JSON");
-console.log("native Month/Multiweek deep diagnostics V2.48: OK");
+console.log("native Month/Multiweek deep diagnostics V2.49: OK");

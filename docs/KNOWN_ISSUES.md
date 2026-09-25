@@ -24,7 +24,7 @@ The DOM scan records very small element bounding rectangles in the reproduced st
 
 ### Project position
 
-The evidence does not support another Graph-sync or native-cache rewrite. V2.46 already tested a forced `refreshItems(true)` refresh without resolving the symptom. V2.48 therefore avoids another destructive GUI workaround and keeps the deep diagnostics for upstream analysis.
+The evidence does not support another Graph-sync or native-cache rewrite. V2.46 already tested a forced `refreshItems(true)` refresh without resolving the symptom. V2.49 therefore avoids another destructive GUI workaround and keeps the deep diagnostics for upstream analysis.
 
 ### Practical workarounds
 
@@ -42,4 +42,4 @@ Until the Thunderbird Calendar frontend behavior is resolved:
 - Mozilla Bugzilla 725276 — recurring appointments not displayed under certain conditions; recent comments include Exchange/365 reproduction.
 - Mozilla Bugzilla 1862611 / 1713625 — separate offline-cache deletion issue fixed in Thunderbird 155; our reproduced case differs because offline storage still contains the affected events.
 
-A new public-safe Bugzilla report package is prepared with V2.48. After an upstream bug ID is assigned, add its link here.
+A new public-safe Bugzilla report package is prepared with V2.49. After an upstream bug ID is assigned, add its link here.

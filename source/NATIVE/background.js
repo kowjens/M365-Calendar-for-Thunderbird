@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "2.0.48";
+const VERSION = "2.0.49";
 const CONFIG_SCHEMA_VERSION = 207;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
@@ -2111,7 +2111,7 @@ function diagnosticSyncWindows(store, calendarId, start, end) {
 function diagnosticSummaryText(payload) {
   const s = payload?.comparison?.summary || {};
   const lines = [
-    `M365 Calendar Diagnostics V2.48`,
+    `M365 Calendar Diagnostics V2.49`,
     `generatedAt=${payload?.metadata?.generatedAt || ""}`,
     `calendar=${payload?.metadata?.calendarName || ""}`,
     `graphCalendarId=${payload?.metadata?.calendarId || ""}`,
@@ -3148,7 +3148,7 @@ async function ensureSpace() {
   }
 }
 
-browser.runtime.onMessage.addListener(async message => {
+async function handleRuntimeMessage(message) {
   try {
     switch (message?.action) {
       case "getConfig": return { ok: true, data: await getConfig() };
@@ -3225,6 +3225,56 @@ browser.runtime.onMessage.addListener(async message => {
       authRequired: Boolean(error?.authRequired)
     };
   }
+}
+
+const HANDLED_RUNTIME_ACTIONS = new Set([
+  "getConfig",
+  "saveConfig",
+  "getOutgoingConfirmation",
+  "resolveOutgoingConfirmation",
+  "authStatus",
+  "login",
+  "logout",
+  "nativeStatus",
+  "ensureNativeCalendars",
+  "syncNativeCalendars",
+  "listCalendars",
+  "listCalendarsCached",
+  "getEvents",
+  "getEvent",
+  "respondEvent",
+  "createEvent",
+  "updateEvent",
+  "deleteEvent",
+  "listAddressBooks",
+  "searchContacts",
+  "contactDiagnostics",
+  "getSchedule",
+  "syncCacheStats",
+  "clearSyncCache",
+  "analyzeInvitation",
+  "respondInvitation",
+  "openSpace"
+]);
+
+browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!HANDLED_RUNTIME_ACTIONS.has(message?.action)) {
+    return false;
+  }
+
+  handleRuntimeMessage(message).then(
+    response => sendResponse(response),
+    error => {
+      console.error("M365 Calendar runtime message error", error);
+      sendResponse({
+        ok: false,
+        error: error?.message || String(error),
+        status: error?.status || 0,
+        authRequired: Boolean(error?.authRequired)
+      });
+    }
+  );
+  return true;
 });
 
 // V2.16 startup: create the normal M365 Space first, then perform a delayed

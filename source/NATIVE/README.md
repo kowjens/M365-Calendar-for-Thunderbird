@@ -1,8 +1,8 @@
-# M365 Calendar for Thunderbird V2.48 – GITHUB_NATIVE
+# M365 Calendar for Thunderbird V2.49 – GITHUB_NATIVE
 
 Public NATIVE edition for Thunderbird.
 
-- Version: **2.0.48 / V2.48**
+- Version: **2.0.49 / V2.49**
 - Distribution: **GitHub**
 - Add-on ID: `m365-calendar-for-thunderbird@3-5pe.com`
 - Native Thunderbird Calendar provider: **yes**

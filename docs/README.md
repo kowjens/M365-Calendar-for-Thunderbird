@@ -21,7 +21,7 @@ Start here if you are installing or administering **M365 Calendar for Thunderbir
 
 ## Releases
 
-- [V2.48](releases/V2.48.md)
+- [V2.49](releases/V2.49.md)
 - [V2.47](releases/V2.47.md)
 - [V2.45](releases/V2.45.md)
 - [V2.44](releases/V2.44.md)

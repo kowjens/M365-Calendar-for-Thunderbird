@@ -1,13 +1,24 @@
 # Changelog
 
-## V2.48 (2026-09-25)
+## 2.0.49 - 2026-09-25
+
+### ATN review hardening
+
+- Reformatted the settings JavaScript and CSS so the shipped ATN package is directly human-reviewable and no longer flagged as minified.
+- Reworked `runtime.onMessage` handling so the registered listener is synchronous and only keeps the response channel open for messages it handles.
+- Removed all `browser.nativeCalendar` references and native-only controls from the STANDARD/ATN code path. NATIVE remains available only in the GitHub/internal NATIVE packages.
+- Added explicit Microsoft Graph / Microsoft identity data-transfer disclosure to the settings UI and ATN publishing notes.
+- Kept the `sensitiveDataUpload` permission intentionally: the add-on exchanges user-requested calendar/invitation data with Microsoft Graph; no telemetry or developer-operated data endpoint is used.
+- Preserved V2.47/V2.48 native diagnostics and the documented Thunderbird Month/Multiweek rendering limitation.
+
+## V2.49 (2026-09-25)
 
 - Document the confirmed NATIVE Month/Multiweek host-UI limitation: in the reproduced Thunderbird 153.3.1 state, Graph, native cache, cached wrapper, underlying provider and DOM item instantiation all contain the affected events while Month/Multiweek can still omit them visually.
 - Keep the V2.47 deep provider/range/current-view diagnostics available for further upstream investigation.
 - Do **not** add another destructive or layout-manipulating workaround; Graph synchronization and native-cache mapping remain unchanged.
 - Add a public `docs/KNOWN_ISSUES.md` with precise scope, evidence, workarounds and related Thunderbird Bugzilla references.
 - Add a public-safe Bugzilla report package to the private complete release master; the raw private diagnostic is not published.
-- Extend the GitHub repository updater so direct upgrades remain supported from V2.43, V2.44, V2.45, V2.46 and V2.47 to V2.48.
+- Extend the GitHub repository updater so direct upgrades remain supported from V2.43, V2.44, V2.45, V2.46 and V2.47 to V2.49.
 - STANDARD/ATN runtime behavior remains unchanged apart from the version increment.
 
 ## V2.47 (2026-09-25)

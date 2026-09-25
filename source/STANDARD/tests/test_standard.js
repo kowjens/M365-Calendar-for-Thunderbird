@@ -8,5 +8,6 @@ const cfg=fs.readFileSync(path.join(root,"config/build-config.js"),"utf8");
 assert.ok(cfg.includes("nativeMode: false"));
 const bg=fs.readFileSync(path.join(root,"background.js"),"utf8");
 assert.ok(bg.includes("const NATIVE_PACKAGE = BUILD_DEFAULTS.nativeMode !== false"));
-assert.ok(bg.includes("if (!NATIVE_PACKAGE) return null;"),"STANDARD probe must exit before browser.nativeCalendar access");
+assert.ok(bg.includes("async function probeNativeApi()"),"STANDARD must contain the no-op native probe shim");
+assert.ok(!bg.includes("browser.nativeCalendar"), "STANDARD package must not reference browser.nativeCalendar");
 console.log("test_standard.js: OK");

@@ -22,7 +22,7 @@ assert.ok(api.includes("Timed out after ${timeoutMs} ms waiting for legacy calen
 
 // Settings diagnostics must surface a failure rather than stay on Loading/checking forever.
 assert.ok(options.includes("async function withTimeout("));
-assert.ok(options.includes('withTimeout(browser.nativeCalendar?.ping?.(),3000,"nativeCalendar.ping")'));
-assert.ok(options.includes('withTimeout(msg("nativeStatus"),15000,"nativeStatus")'));
+assert.ok(/withTimeout\(browser\.nativeCalendar\?\.ping\?\.\(\),\s*3000,\s*"nativeCalendar\.ping"\)/.test(options));
+assert.ok(/withTimeout\(msg\("nativeStatus"\),\s*15000,\s*"nativeStatus"\)/.test(options));
 
 console.log("V2.41 Thunderbird 154+ calendar-startup compatibility contract passed");

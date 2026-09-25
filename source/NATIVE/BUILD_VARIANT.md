@@ -1,6 +1,6 @@
 # Build Variant
 
-- Version: 2.0.48 / V2.48
+- Version: 2.0.49 / V2.49
 - Distribution: GITHUB
 - Mode: NATIVE
 - Native Thunderbird calendar provider: yes

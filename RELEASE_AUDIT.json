@@ -1,6 +1,6 @@
 {
-  "version": "2.0.48",
-  "display_version": "V2.48",
+  "version": "2.0.49",
+  "display_version": "V2.49",
   "public_xpis": [
     {
       "file": "M365_Thunderbird_Calendar_V2.48_ATN_STANDARD.xpi",
@@ -16,6 +16,21 @@
       "file": "M365_Thunderbird_Calendar_V2.48_STANDARD.xpi",
       "bytes": 88084,
       "sha256": "f5635ff441ccd77ef7d41b69edd85016bc2caef444641015224ad3d9605bfa7f"
+    },
+    {
+      "file": "M365_Thunderbird_Calendar_V2.49_ATN_STANDARD.xpi",
+      "bytes": 88049,
+      "sha256": "4f3be98cd81f4e899d102500909c96a4b4ee9d1f3007f375f5dcd016153f05b0"
+    },
+    {
+      "file": "M365_Thunderbird_Calendar_V2.49_NATIVE.xpi",
+      "bytes": 133762,
+      "sha256": "33e99a3c7624eec044028e0f69b595b5f1271b381dcc444b32c621bc739edfe9"
+    },
+    {
+      "file": "M365_Thunderbird_Calendar_V2.49_STANDARD.xpi",
+      "bytes": 88049,
+      "sha256": "4f3be98cd81f4e899d102500909c96a4b4ee9d1f3007f375f5dcd016153f05b0"
     }
   ],
   "status": "PASS"

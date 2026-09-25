@@ -48,3 +48,11 @@ No Microsoft 365 calendar data is transferred until the user configures a Micros
 The public source code is available at:
 
 https://github.com/kowjens/M365-Calendar-for-Thunderbird
+
+## Microsoft service data transfer
+
+The add-on communicates only with Microsoft identity endpoints (`login.microsoftonline.com`) and Microsoft Graph (`graph.microsoft.com`) for the Microsoft 365 features explicitly requested by the user. Depending on the feature used, this can include OAuth authentication data, calendar events, event attendees, meeting metadata, invitation-related message data and contact/address-book data needed for recipient selection.
+
+The connection is initiated by the user by entering/configuring the Microsoft Entra application/tenant information and choosing **Microsoft login**. These transfers are necessary for the add-on's core Microsoft 365 functionality. The add-on does not send telemetry, analytics, calendar contents, messages, contacts, credentials or diagnostics to servers operated by the add-on developer.
+
+The `sensitiveDataUpload` permission is requested because Thunderbird's review guidance requires it for add-ons that intentionally transmit sensitive user data to a hard-coded third-party service. The destination here is Microsoft Graph / Microsoft identity, not an add-on developer service.
