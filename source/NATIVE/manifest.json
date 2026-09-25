@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "__MSG_extName__",
+  "name": "M365 Calendar Native for Thunderbird",
   "description": "__MSG_extDescription__",
-  "version": "2.0.44",
+  "version": "2.0.48",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "default_locale": "de",
   "browser_specific_settings": {

@@ -1,30 +1,12 @@
 # Troubleshooting and known issues
 
-## Event is present in Month view but missing in one Multiweek position
+## Event is visible in Day/Week but missing in Month or Multiweek (NATIVE, known host issue)
 
-An observed Thunderbird case can look like this:
+V2.47 deep diagnostics reproduced this with complete Graph/native data. For the exact affected Multiweek range, Thunderbird's cached wrapper, underlying provider and offline storage returned the same events, and corresponding `calendar-month-day-box-item` objects were found in the Month/Multiweek DOM scan.
 
-- an event is visible in Month view;
-- in a two-week Multiweek range it is missing when its week is the second row;
-- after moving the view so the same week becomes the first row, the event appears.
+V2.48 therefore treats the remaining failure as a Thunderbird Calendar frontend/rendering limitation instead of applying another synchronization rewrite. A forced `refreshItems(true)` did not resolve the symptom in V2.46.
 
-For a reproduced V2.32 case, two diagnostic exports covering overlapping 14-day ranges showed that the affected event was:
-
-1. returned by Microsoft Graph;
-2. present in the add-on's native Thunderbird cache;
-3. returned by the native `eventParents` range query;
-4. returned by the native `eventOccurrences` range query; and
-5. returned by the native `allOccurrences` range query
-
-**in both date ranges**.
-
-That means the event was available to Thunderbird in both cases and the difference occurred later in Thunderbird's Calendar view/rendering layer. A historically similar Thunderbird issue is Mozilla Bugzilla 1790869 (events missing in Month/Multiweek until view navigation). This does not prove the same internal root cause in current Thunderbird versions, but it is a useful comparison.
-
-### What to do
-
-- Switch Month ↔ Multiweek or move the Multiweek range by one week to force a redraw.
-- Do not repeatedly delete/recreate the Microsoft 365 calendar solely for this symptom.
-- If the event is missing from Graph/cache/range diagnostics as well, then it is a different synchronization problem and the diagnostic ZIP should be attached to a private support/debug report after removing sensitive data as appropriate.
+**Recommended:** use Day/Week or the add-on's Microsoft 365 Space when event completeness is critical. If reporting the problem, create a diagnostic ZIP before navigating away. See [Known issues](KNOWN_ISSUES.md).
 
 ## Create a diagnostic ZIP
 

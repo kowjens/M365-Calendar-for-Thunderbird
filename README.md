@@ -6,11 +6,13 @@
 
 Open-source Microsoft 365 / Exchange Online calendar integration for Mozilla Thunderbird using **Microsoft Graph**, **OAuth2 Authorization Code + PKCE**, Microsoft Teams meeting support and an optional deeper integration into Thunderbird's built-in Calendar.
 
-**Version:** 2.0.44 / V2.44  
+**Version:** 2.0.48 / V2.48  
 **Author:** Jens Kowalsky, 3-5 Power Electronics GmbH  
 **License:** Mozilla Public License 2.0
 
 > Independent community project. Not an official Microsoft, Mozilla/Thunderbird or 3-5 Power Electronics product.
+
+**Current release V2.48:** V2.47 diagnostics reproduced the Month/Multiweek omission with the affected events still present in Microsoft Graph results, Thunderbird native cache, cached calendar wrapper, underlying provider queries and instantiated `calendar-month-day-box-item` objects. V2.48 therefore treats this as a **known Thunderbird Calendar frontend/rendering limitation** for the NATIVE edition rather than applying another synchronization workaround. Runtime calendar mapping is intentionally unchanged; the deep diagnostics remain available for upstream investigation. See [Known issues](docs/KNOWN_ISSUES.md) and [V2.48 release notes](docs/releases/V2.48.md).
 
 ## Public editions
 
@@ -64,7 +66,7 @@ Start with the [documentation index](docs/README.md).
 | Administrator guide | [DE](docs/ADMIN_GUIDE_DE.md) | [EN](docs/ADMIN_GUIDE_EN.md) |
 | Microsoft Entra app setup | [DE](docs/setup/MICROSOFT_ENTRA_SETUP_DE.md) | [EN](docs/setup/MICROSOFT_ENTRA_SETUP_EN.md) |
 
-Also see [Permissions](docs/PERMISSIONS.md), [Compatibility](docs/COMPATIBILITY.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Changelog](CHANGELOG.md), [Publishing text](PUBLISHING_V2.44.md) and [V2.44 release notes](docs/releases/V2.44.md).
+Also see [Permissions](docs/PERMISSIONS.md), [Compatibility](docs/COMPATIBILITY.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Changelog](CHANGELOG.md), [Publishing text](PUBLISHING.md) and [V2.48 release notes](docs/releases/V2.48.md).
 
 ## Microsoft Entra configuration
 

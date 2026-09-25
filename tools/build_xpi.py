@@ -64,7 +64,7 @@ def build(variant, output_suffix=None):
 
 
 def build_atn():
-    # ATN V2.44 deliberately packages the STANDARD source unchanged.
+    # ATN deliberately packages the STANDARD source unchanged.
     return build("STANDARD", output_suffix="ATN_STANDARD")
 
 

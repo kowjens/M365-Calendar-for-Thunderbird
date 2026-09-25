@@ -95,7 +95,7 @@ function populateTimeZoneSelect(value) {
 }
 
 function displayVersion(value) {
-  const raw = String(value || "2.0.44");
+  const raw = String(value || "2.0.48");
   const match = raw.match(/^(\d+)\.0\.(\d+)$/);
   return match ? `V${match[1]}.${Number(match[2])}` : `V${raw}`;
 }
@@ -127,7 +127,7 @@ function updateBuildModeBanner() {
   // states separate prevents a broken NATIVE provider from being mislabeled
   // as a STANDARD build.
   const packagedNative = Boolean(state.auth.nativeMode);
-  const version = displayVersion(state.auth.version || "2.0.44");
+  const version = displayVersion(state.auth.version || "2.0.48");
   els.buildModeBanner.className = `build-mode-banner ${packagedNative ? "native" : "standard"}`;
   if (packagedNative) {
     const apiLabel = state.auth.nativeCapable
@@ -304,7 +304,7 @@ function diagnosticComparisonCsv(data) {
 function diagnosticReadme(data) {
   const summary = data?.comparison?.summary || {};
   return [
-    "M365 Calendar for Thunderbird V2.44 - diagnostic export",
+    "M365 Calendar V2.48 - diagnostic export",
     "",
     "Purpose:",
     "Compare the Microsoft Graph / M365 Space calendarView with the actual Thunderbird native provider cache.",
@@ -320,6 +320,8 @@ function diagnosticReadme(data) {
     "- native_cache.json: actual Thunderbird provider cache items including mapping/recurrence metadata",
     "- native_calendar.ics: VEVENT representation read from the native Thunderbird cache",
     "- native_range_queries.json: real cache.sqlite range-query results for parent/event occurrence filter masks",
+    "- native_current_view.json: current Thunderbird Month/Multiweek/Week/Day view, exact range queries and best-effort rendered-item scan",
+    "- native_provider_queries.json: bounded history of real getItems() requests received by the M365 provider",
     "- native_diagnostics.json: provider/cache diagnostics",
     "",
     `Graph events: ${Number(summary.graphEvents || 0)}`,
@@ -377,6 +379,8 @@ async function exportCalendarDiagnostics() {
       { name: "native_cache.json", data: diagnosticJson({ ...nativeSnapshot, ics: undefined }) },
       { name: "native_calendar.ics", data: String(nativeSnapshot?.ics || "") },
       { name: "native_range_queries.json", data: diagnosticJson(nativeSnapshot?.rangeQueries || {}) },
+      { name: "native_current_view.json", data: diagnosticJson(nativeSnapshot?.currentViewDiagnostics || {}) },
+      { name: "native_provider_queries.json", data: diagnosticJson(nativeSnapshot?.providerQueryStats || data?.nativeDiagnostics?.providerQueryStats || {}) },
       { name: "native_diagnostics.json", data: diagnosticJson({ diagnostics: data?.nativeDiagnostics || null, error: data?.nativeError || "", auth: data?.authDiagnostics || null }) },
       { name: "comparison.json", data: diagnosticJson(data?.comparison || {}) },
       { name: "series_comparison.json", data: diagnosticJson(data?.comparison?.series || []) },
@@ -384,7 +388,7 @@ async function exportCalendarDiagnostics() {
     ];
     const zip = createDiagnosticZip(files);
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z").replace("T", "_");
-    downloadDiagnosticBlob(zip, `M365_Calendar_Diagnostics_V2.44_${stamp}.zip`);
+    downloadDiagnosticBlob(zip, `M365_Calendar_Diagnostics_V2.48_${stamp}.zip`);
     const summary = data?.comparison?.summary || {};
     setDiagnosticExportStatus(t("diagnosticExportDone", [String(summary.graphEvents || 0), String(summary.nativeEvents || 0), String(summary.missingNative || 0)]), "success");
   } catch (error) {
@@ -1160,7 +1164,7 @@ async function openSettings() {
   // "native API/provider not loaded" after restart even when the subsequent
   // refresh successfully loaded and registered the provider.
   await refreshNativeStatus();
-  const distribution = t("buildInfoPublic", displayVersion(state.auth.version || "2.0.44"));
+  const distribution = t("buildInfoPublic", displayVersion(state.auth.version || "2.0.48"));
   const mode = state.auth.nativeMode ? t("nativeBuildTitle") : t("standardBuildTitle");
   const apiState = state.auth.nativeMode
     ? (state.auth.nativeCapable ? t("nativeApiLoaded") : t("nativeApiNotLoaded"))
@@ -1222,7 +1226,7 @@ function renderNativeDiagnostics(status) {
   const diag = status?.diagnostics || {};
   const auto = status?.autoEnsure || {};
   const lines = [
-    `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.44"}`,
+    `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.48"}`,
     `experiment=${status?.available ? "loaded" : "not-loaded"}`,
     `providerRuntime=${diag.providerModuleLoaded ? "loaded" : "not-loaded"}`,
     `providerType=${diag.providerType || "-"}`,
@@ -1500,7 +1504,7 @@ async function refreshNativeStatus() {
     els.nativeSyncBtn.disabled = true;
     els.nativeStatusText.textContent = t("nativeBridgeFailed", error.message || String(error));
     if (els.nativeDebugText) {
-      els.nativeDebugText.textContent = `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.44"}\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
+      els.nativeDebugText.textContent = `build=${state.auth?.nativeMode ? "NATIVE" : "STANDARD"} ${state.auth?.version || "2.0.48"}\nFAIL refreshNativeStatus :: ${error.message || String(error)}`;
       if (els.nativeDebugDetails) els.nativeDebugDetails.open = true;
     }
   }

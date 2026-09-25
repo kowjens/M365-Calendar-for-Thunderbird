@@ -1,0 +1,22 @@
+{
+  "version": "2.0.48",
+  "display_version": "V2.48",
+  "public_xpis": [
+    {
+      "file": "M365_Thunderbird_Calendar_V2.48_ATN_STANDARD.xpi",
+      "bytes": 88084,
+      "sha256": "f5635ff441ccd77ef7d41b69edd85016bc2caef444641015224ad3d9605bfa7f"
+    },
+    {
+      "file": "M365_Thunderbird_Calendar_V2.48_NATIVE.xpi",
+      "bytes": 133048,
+      "sha256": "158d3e293977fc07dc7958be2142191bfb40ed605973f4aced3e404ee8a24a5a"
+    },
+    {
+      "file": "M365_Thunderbird_Calendar_V2.48_STANDARD.xpi",
+      "bytes": 88084,
+      "sha256": "f5635ff441ccd77ef7d41b69edd85016bc2caef444641015224ad3d9605bfa7f"
+    }
+  ],
+  "status": "PASS"
+}

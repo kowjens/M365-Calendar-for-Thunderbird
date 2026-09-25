@@ -1,6 +1,6 @@
 {
   "name": "m365-calendar-for-thunderbird",
-  "version": "2.0.44",
+  "version": "2.0.48",
   "description": "Microsoft 365 / Exchange Online calendar and Teams integration for Thunderbird with public STANDARD and NATIVE editions.",
   "author": "Jens Kowalsky, 3-5 Power Electronics GmbH",
   "license": "MPL-2.0",
@@ -10,7 +10,9 @@
     "build": "python tools/build_xpi.py --all",
     "check:neutral": "python tools/neutrality_check.py",
     "check:atn": "python tools/atn_check.py",
-    "build:atn": "python tools/build_xpi.py --atn"
+    "build:atn": "python tools/build_xpi.py --atn",
+    "audit": "python tools/release_audit.py",
+    "release:public": "python tools/make_public_release.py"
   },
   "keywords": [
     "thunderbird",

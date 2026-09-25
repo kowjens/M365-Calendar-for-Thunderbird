@@ -1046,6 +1046,159 @@ function _m365NativeCreateProviderRuntime() {
     error: ""
   };
 
+
+
+  // V2.48: bounded observation of the real getItems() requests that reach the
+  // uncached M365 provider. Recording the arguments is deliberately synchronous
+  // and side-effect free. For bounded range queries we additionally issue a
+  // read-only mirror query against offlineStorage.getItemsAsArray() when
+  // available; this never consumes the ReadableStream returned to Thunderbird.
+  const nativeProviderQueryStats = {
+    total: 0,
+    bounded: 0,
+    lastAt: "",
+    lastCalendarId: "",
+    lastGraphCalendarId: "",
+    lastError: "",
+    recent: []
+  };
+  let nativeDiagnosticQueryDepth = 0;
+
+  function nativeQueryDateDescriptor(value) {
+    if (!value) return null;
+    const result = {
+      icalString: "",
+      iso: "",
+      timezone: "",
+      isDate: false,
+      nativeTime: null
+    };
+    try { result.icalString = safeString(value.icalString || ""); } catch (_) {}
+    try { result.iso = dateTimeToIso(value); } catch (_) {}
+    try { result.timezone = safeString(value.timezone?.tzid || value.timezone || ""); } catch (_) {}
+    try { result.isDate = Boolean(value.isDate); } catch (_) {}
+    try {
+      const nativeTime = Number(value.nativeTime);
+      result.nativeTime = Number.isFinite(nativeTime) ? nativeTime : null;
+    } catch (_) {}
+    return result;
+  }
+
+  function nativeFilterDescriptor(filter) {
+    const value = Number(filter || 0);
+    const names = [];
+    for (const name of [
+      "ITEM_FILTER_TYPE_EVENT",
+      "ITEM_FILTER_TYPE_TODO",
+      "ITEM_FILTER_COMPLETED_ALL",
+      "ITEM_FILTER_COMPLETED_YES",
+      "ITEM_FILTER_COMPLETED_NO",
+      "ITEM_FILTER_CLASS_OCCURRENCES",
+      "ITEM_FILTER_CLASS_ITEMS",
+      "ITEM_FILTER_ALL_ITEMS"
+    ]) {
+      try {
+        const flag = Number(Ci.calICalendar?.[name]);
+        if (Number.isFinite(flag) && flag !== 0 && (value & flag) === flag) names.push(name);
+      } catch (_) {}
+    }
+    return { value, names };
+  }
+
+  function providerQuerySnapshot() {
+    return {
+      total: nativeProviderQueryStats.total,
+      bounded: nativeProviderQueryStats.bounded,
+      lastAt: nativeProviderQueryStats.lastAt,
+      lastCalendarId: nativeProviderQueryStats.lastCalendarId,
+      lastGraphCalendarId: nativeProviderQueryStats.lastGraphCalendarId,
+      lastError: nativeProviderQueryStats.lastError,
+      recent: nativeProviderQueryStats.recent.map(entry => ({ ...entry }))
+    };
+  }
+
+  function providerMirrorItemDescriptor(item, fallbackCalendar) {
+    const calendar = item?.calendar || item?.parentItem?.calendar || fallbackCalendar || null;
+    let start = "";
+    let end = "";
+    let recurrenceId = "";
+    let parentItemId = "";
+    try { start = dateTimeToIso(item?.startDate || item?.entryDate); } catch (_) {}
+    try { end = dateTimeToIso(item?.endDate || item?.dueDate); } catch (_) {}
+    try { recurrenceId = safeString(item?.recurrenceId?.icalString || dateTimeToIso(item?.recurrenceId)); } catch (_) {}
+    try { parentItemId = safeString(item?.parentItem?.id); } catch (_) {}
+    return {
+      id: safeString(item?.id),
+      title: safeString(item?.title),
+      start,
+      end,
+      recurrenceId,
+      parentItemId,
+      calendarId: safeString(calendar?.id),
+      graphCalendarId: safeString(calendar?.getProperty?.(PROP_GRAPH_ID) || rawCalendar(calendar)?.getProperty?.(PROP_GRAPH_ID))
+    };
+  }
+
+  function recordProviderGetItems(calendar, filter, count, rangeStart, rangeEnd) {
+    if (nativeDiagnosticQueryDepth > 0) return null;
+    const graphCalendarId = safeString(calendar?.getProperty?.(PROP_GRAPH_ID));
+    const entry = {
+      at: new Date().toISOString(),
+      calendarId: safeString(calendar?.id),
+      calendarName: safeString(calendar?.name),
+      graphCalendarId,
+      filter: nativeFilterDescriptor(filter),
+      count: Number(count || 0),
+      rangeStart: nativeQueryDateDescriptor(rangeStart),
+      rangeEnd: nativeQueryDateDescriptor(rangeEnd),
+      mirrorResultCount: null,
+      mirrorItems: [],
+      mirrorTruncated: false,
+      mirrorError: "",
+      stack: ""
+    };
+    try {
+      entry.stack = safeString(new Error().stack)
+        .split("\n")
+        .slice(1, 8)
+        .map(line => line.trim())
+        .join(" | ");
+    } catch (_) {}
+    nativeProviderQueryStats.total += 1;
+    if (rangeStart && rangeEnd) nativeProviderQueryStats.bounded += 1;
+    nativeProviderQueryStats.lastAt = entry.at;
+    nativeProviderQueryStats.lastCalendarId = entry.calendarId;
+    nativeProviderQueryStats.lastGraphCalendarId = graphCalendarId;
+    nativeProviderQueryStats.recent.push(entry);
+    if (nativeProviderQueryStats.recent.length > 120) nativeProviderQueryStats.recent.splice(0, nativeProviderQueryStats.recent.length - 120);
+
+    if (rangeStart && rangeEnd && typeof calendar?.offlineStorage?.getItemsAsArray === "function") {
+      try {
+        const mirror = calendar.offlineStorage.getItemsAsArray(filter, count, rangeStart, rangeEnd);
+        Promise.resolve(mirror).then(items => {
+          try {
+            const list = Array.isArray(items) ? items : Array.from(items || []);
+            entry.mirrorResultCount = list.length;
+            entry.mirrorTruncated = list.length > 250;
+            entry.mirrorItems = list.slice(0, 250).map(item => providerMirrorItemDescriptor(item, calendar));
+          } catch (error) {
+            entry.mirrorResultCount = null;
+            entry.mirrorItems = [];
+            entry.mirrorError = errorText(error);
+            nativeProviderQueryStats.lastError = entry.mirrorError;
+          }
+        }).catch(error => {
+          entry.mirrorError = errorText(error);
+          nativeProviderQueryStats.lastError = entry.mirrorError;
+        });
+      } catch (error) {
+        entry.mirrorError = errorText(error);
+        nativeProviderQueryStats.lastError = entry.mirrorError;
+      }
+    }
+    return entry;
+  }
+
   // Serialize every writer for one Graph calendar. Thunderbird's own
   // "Reload Calendars and Changes" can invoke provider replay while the
   // WebExtension also performs a direct cache push; running both concurrently
@@ -1061,39 +1214,95 @@ function _m365NativeCreateProviderRuntime() {
     });
   }
 
-  // V2.18: Thunderbird can leave stale event DOM nodes behind when a cached
-  // provider calendar is removed from and added back to the composite view.
-  // The built-in calendar code itself uses currentView().goToDay() as a
-  // no-navigation refresh. Keep a small observer here and request that same
-  // full view refresh after an M365 Hide/Show transition.
+  // V2.46: refresh the item collection without rebuilding/repositioning the
+  // current Calendar view. Month/Multiweek can otherwise retain an incomplete
+  // row after provider/cache notifications even though Day/Week and range
+  // queries already contain the affected events. Current Thunderbird views
+  // expose refreshItems(force), which invalidates the filtered item refresh and
+  // re-queries visible calendars while preserving the current view range. Keep
+  // goToDay() only as a compatibility fallback for older Thunderbird versions.
   const nativeViewReloadStats = {
     scheduled: 0,
     executed: 0,
     refreshedViews: 0,
     lastReason: "",
-    lastError: ""
+    lastError: "",
+    lastStrategies: [],
+    lastViews: []
   };
   let nativeVisibilityObserver = null;
   let nativeViewReloadPending = false;
 
-  function reloadOpenCalendarViews(reason = "manual") {
+  function viewDateText(value) {
+    try {
+      if (!value) return "";
+      if (value.icalString) return safeString(value.icalString);
+      return safeString(value);
+    } catch (_) {
+      return "";
+    }
+  }
+
+  async function refreshCalendarViewItems(view) {
+    if (view && typeof view.refreshItems === "function") {
+      const result = view.refreshItems(true);
+      if (result && typeof result.then === "function") await result;
+      return "refreshItems(force)";
+    }
+    if (view && typeof view.goToDay === "function") {
+      view.goToDay();
+      return "goToDay(legacy-fallback)";
+    }
+    return "";
+  }
+
+  async function reloadOpenCalendarViews(reason = "manual") {
     let refreshed = 0;
     let lastError = "";
+    const strategies = [];
+    const views = [];
     try {
       const windows = Services.wm.getEnumerator(null);
       while (windows.hasMoreElements()) {
         const win = windows.getNext();
+        if (!win || win.closed || typeof win.currentView !== "function") continue;
+        let view = null;
+        const detail = {
+          id: "",
+          type: "",
+          startDay: "",
+          endDay: "",
+          rangeStartDate: "",
+          rangeEndDate: "",
+          selectedDay: "",
+          strategy: "",
+          ok: false,
+          elapsedMs: 0,
+          error: ""
+        };
+        const started = Date.now();
         try {
-          if (!win || win.closed || typeof win.currentView !== "function") continue;
-          const view = win.currentView();
-          if (!view || typeof view.goToDay !== "function") continue;
-          // Calling goToDay() without a date is Thunderbird's own refresh path:
-          // the current range is kept, while the view is rebuilt and its items
-          // are queried again from the composite calendar.
-          view.goToDay();
+          view = win.currentView();
+          if (!view) continue;
+          detail.id = safeString(view.id || view.localName || "");
+          detail.type = safeString(view.type || view.viewType || "");
+          detail.startDay = viewDateText(view.startDay);
+          detail.endDay = viewDateText(view.endDay);
+          detail.rangeStartDate = viewDateText(view.rangeStartDate);
+          detail.rangeEndDate = viewDateText(view.rangeEndDate);
+          detail.selectedDay = viewDateText(view.selectedDay);
+          const strategy = await refreshCalendarViewItems(view);
+          if (!strategy) continue;
+          detail.strategy = strategy;
+          detail.ok = true;
+          strategies.push(strategy);
           refreshed += 1;
         } catch (error) {
-          lastError = errorText(error);
+          detail.error = errorText(error);
+          lastError = detail.error;
+        } finally {
+          detail.elapsedMs = Math.max(0, Date.now() - started);
+          if (view) views.push(detail);
         }
       }
     } catch (error) {
@@ -1103,6 +1312,8 @@ function _m365NativeCreateProviderRuntime() {
     nativeViewReloadStats.refreshedViews = refreshed;
     nativeViewReloadStats.lastReason = safeString(reason);
     nativeViewReloadStats.lastError = lastError;
+    nativeViewReloadStats.lastStrategies = strategies;
+    nativeViewReloadStats.lastViews = views;
     return refreshed;
   }
 
@@ -1112,11 +1323,16 @@ function _m365NativeCreateProviderRuntime() {
     if (nativeViewReloadPending) return;
     nativeViewReloadPending = true;
     // Composite add/remove changes the persistent calendar property while it is
-    // still processing the click. Run the refresh on the next main-thread turn
-    // so the composite membership has settled first.
+    // still processing the click. Start the item refresh on the next main-thread
+    // turn so the composite membership has settled first.
     Services.tm.dispatchToMainThread(() => {
-      nativeViewReloadPending = false;
-      reloadOpenCalendarViews(nativeViewReloadStats.lastReason || reason);
+      reloadOpenCalendarViews(nativeViewReloadStats.lastReason || reason)
+        .catch(error => {
+          nativeViewReloadStats.lastError = errorText(error);
+        })
+        .finally(() => {
+          nativeViewReloadPending = false;
+        });
     });
   }
 
@@ -1812,7 +2028,10 @@ function _m365NativeCreateProviderRuntime() {
     }
 
     getItem() { return this.offlineStorage.getItem(...arguments); }
-    getItems() { return this.offlineStorage.getItems(...arguments); }
+    getItems(aFilter, aCount, aRangeStart, aRangeEnd) {
+      recordProviderGetItems(this, aFilter, aCount, aRangeStart, aRangeEnd);
+      return this.offlineStorage.getItems(...arguments);
+    }
 
     refresh() {
       // The cached wrapper calls replayChangesOn() for actual network sync.
@@ -2345,7 +2564,7 @@ function _m365NativeCreateProviderRuntime() {
   async function reloadViews(extension, reason = "manual") {
     await waitForCalendarStartup();
     ensureProviderRegistered(extension);
-    const refreshed = reloadOpenCalendarViews(reason);
+    const refreshed = await reloadOpenCalendarViews(reason);
     return {
       ok: true,
       refreshed,
@@ -2865,6 +3084,7 @@ function _m365NativeCreateProviderRuntime() {
         trace: [...nativeTrace.trace],
         syncStats: { ...nativeSyncStats },
         directEventStats: { ...nativeDirectEventStats },
+        providerQueryStats: providerQuerySnapshot(),
         viewReloadStats: { ...nativeViewReloadStats },
         teamsButtonStats: { ...nativeTeamsUiStats },
         eventEditorStats: { ...nativeEventEditorStats },
@@ -2907,6 +3127,7 @@ function _m365NativeCreateProviderRuntime() {
         trace: [...nativeTrace.trace],
         syncStats: { ...nativeSyncStats },
         directEventStats: { ...nativeDirectEventStats },
+        providerQueryStats: providerQuerySnapshot(),
         viewReloadStats: { ...nativeViewReloadStats },
         teamsButtonStats: { ...nativeTeamsUiStats },
         eventEditorStats: { ...nativeEventEditorStats }
@@ -2988,6 +3209,183 @@ function _m365NativeCreateProviderRuntime() {
     };
   }
 
+
+
+  async function diagnosticCalendarObjectRangeQuery(calendar, filter, rangeStart, rangeEnd, layer) {
+    const result = [];
+    let error = "";
+    if (!calendar?.getItems) return { layer, filter, count: 0, error: "getItems unavailable", items: [] };
+    try {
+      const stream = calendar.getItems(filter, 0, rangeStart, rangeEnd);
+      for await (const batch of cal.iterate.streamValues(stream)) {
+        for (const item of batch || []) result.push(diagnosticNativeItem(item, item?.calendar || calendar));
+      }
+    } catch (e) {
+      error = errorText(e);
+    }
+    result.sort((a, b) => Date.parse(a.start || 0) - Date.parse(b.start || 0));
+    return { layer, filter, count: result.length, error, items: result };
+  }
+
+  function diagnosticViewDateDescriptor(value) {
+    const result = nativeQueryDateDescriptor(value) || { icalString: "", iso: "", timezone: "", isDate: false, nativeTime: null };
+    try { result.year = Number(value?.year); } catch (_) {}
+    try { result.month = Number(value?.month) + 1; } catch (_) {}
+    try { result.day = Number(value?.day); } catch (_) {}
+    return result;
+  }
+
+  function diagnosticRenderedCalendarItems(view, graphCalendarId) {
+    const items = [];
+    const seen = new Set();
+    let inspectedNodes = 0;
+    let truncated = false;
+    const maxNodes = 10000;
+    const maxItems = 500;
+
+    const addItem = (element, item, property) => {
+      if (!item || typeof item !== "object") return;
+      let id = "";
+      let title = "";
+      let start = "";
+      let end = "";
+      let calendar = null;
+      try { id = safeString(item.id); } catch (_) {}
+      if (!id) return;
+      try { title = safeString(item.title); } catch (_) {}
+      try { start = dateTimeToIso(item.startDate || item.entryDate); } catch (_) {}
+      try { end = dateTimeToIso(item.endDate || item.dueDate); } catch (_) {}
+      try { calendar = item.calendar || item.parentItem?.calendar || null; } catch (_) {}
+      const itemGraphId = safeString(calendar?.getProperty?.(PROP_GRAPH_ID) || rawCalendar(calendar)?.getProperty?.(PROP_GRAPH_ID));
+      if (graphCalendarId && itemGraphId && itemGraphId !== graphCalendarId) return;
+      const key = `${id}|${start}|${safeString(item?.recurrenceId?.icalString || "")}`;
+      if (seen.has(key) || items.length >= maxItems) return;
+      seen.add(key);
+      let rect = null;
+      try {
+        const r = element?.getBoundingClientRect?.();
+        if (r) rect = { x: r.x, y: r.y, width: r.width, height: r.height };
+      } catch (_) {}
+      items.push({
+        id,
+        title,
+        start,
+        end,
+        recurrenceId: safeString(item?.recurrenceId?.icalString || ""),
+        calendarId: safeString(calendar?.id),
+        graphCalendarId: itemGraphId,
+        tagName: safeString(element?.localName || element?.tagName || ""),
+        elementId: safeString(element?.id || ""),
+        property,
+        rect
+      });
+    };
+
+    const inspectElement = element => {
+      if (!element || inspectedNodes >= maxNodes) { truncated = true; return; }
+      inspectedNodes += 1;
+      for (const property of ["occurrence", "mOccurrence", "calendarItem", "mItem", "item"]) {
+        try { addItem(element, element[property], property); } catch (_) {}
+      }
+      let children = [];
+      try { children = Array.from(element.children || []); } catch (_) {}
+      for (const child of children) inspectElement(child);
+      try {
+        if (element.shadowRoot) {
+          for (const child of Array.from(element.shadowRoot.children || [])) inspectElement(child);
+        }
+      } catch (_) {}
+    };
+
+    try { inspectElement(view); } catch (_) {}
+    return { inspectedNodes, truncated, count: items.length, items };
+  }
+
+  function diagnosticViewInternals(view) {
+    const result = {};
+    try {
+      for (const key of Object.keys(view || {}).filter(name => /(item|event|occurr|calendar|range|day)/i.test(name)).slice(0, 80)) {
+        try {
+          const value = view[key];
+          if (Array.isArray(value)) result[key] = { type: "Array", size: value.length };
+          else if (value instanceof Map || value instanceof Set) result[key] = { type: value.constructor.name, size: value.size };
+          else if (value && typeof value === "object" && typeof value.length === "number") result[key] = { type: value.constructor?.name || "Object", size: Number(value.length) };
+          else if (["string", "number", "boolean"].includes(typeof value)) result[key] = value;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return result;
+  }
+
+  async function collectCurrentViewDiagnostics(extension, graphCalendarId) {
+    const result = {
+      capturedAt: new Date().toISOString(),
+      graphCalendarId: safeString(graphCalendarId),
+      providerQueriesBeforeDiagnostic: providerQuerySnapshot(),
+      views: [],
+      error: ""
+    };
+    try {
+      const ownCalendars = cal.manager.getCalendars().filter(item => isOwnCalendar(item, extension));
+      const target = graphCalendarId
+        ? ownCalendars.find(item => graphCalendarIdFor(item) === safeString(graphCalendarId))
+        : ownCalendars[0];
+      const windows = Services.wm.getEnumerator(null);
+      while (windows.hasMoreElements()) {
+        const win = windows.getNext();
+        if (!win || win.closed || typeof win.currentView !== "function") continue;
+        let view = null;
+        try { view = win.currentView(); } catch (_) {}
+        if (!view) continue;
+        const rangeStart = view.startDay || view.rangeStartDate || null;
+        let rangeEnd = view.endDay || null;
+        if (!rangeEnd && view.rangeEndDate) {
+          try { rangeEnd = view.rangeEndDate.clone(); rangeEnd.day += 1; } catch (_) { rangeEnd = view.rangeEndDate; }
+        }
+        const detail = {
+          id: safeString(view.id || view.localName || ""),
+          type: safeString(view.type || view.viewType || ""),
+          startDay: diagnosticViewDateDescriptor(view.startDay),
+          endDay: diagnosticViewDateDescriptor(view.endDay),
+          rangeStartDate: diagnosticViewDateDescriptor(view.rangeStartDate),
+          rangeEndDate: diagnosticViewDateDescriptor(view.rangeEndDate),
+          selectedDay: diagnosticViewDateDescriptor(view.selectedDay),
+          queryRangeStart: diagnosticViewDateDescriptor(rangeStart),
+          queryRangeEnd: diagnosticViewDateDescriptor(rangeEnd),
+          internals: diagnosticViewInternals(view),
+          rendered: diagnosticRenderedCalendarItems(view, safeString(graphCalendarId)),
+          queries: {},
+          error: ""
+        };
+        if (target && rangeStart && rangeEnd) {
+          const raw = rawCalendar(target);
+          const storage = raw?.offlineStorage || target?.wrappedJSObject?.mCachedCalendar || null;
+          const filters = {
+            eventParents: Ci.calICalendar.ITEM_FILTER_TYPE_EVENT,
+            eventOccurrences: Ci.calICalendar.ITEM_FILTER_TYPE_EVENT | Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES,
+            allOccurrences: Ci.calICalendar.ITEM_FILTER_ALL_ITEMS | Ci.calICalendar.ITEM_FILTER_CLASS_OCCURRENCES
+          };
+          for (const [name, filter] of Object.entries(filters)) {
+            const layer = {};
+            layer.cachedWrapper = await diagnosticCalendarObjectRangeQuery(target, filter, rangeStart, rangeEnd, "cached-wrapper");
+            if (raw?.getItems) {
+              nativeDiagnosticQueryDepth += 1;
+              try { layer.uncachedProvider = await diagnosticCalendarObjectRangeQuery(raw, filter, rangeStart, rangeEnd, "uncached-provider"); }
+              finally { nativeDiagnosticQueryDepth = Math.max(0, nativeDiagnosticQueryDepth - 1); }
+            }
+            if (storage?.getItems) layer.offlineStorage = await diagnosticCalendarObjectRangeQuery(storage, filter, rangeStart, rangeEnd, "offline-storage");
+            detail.queries[name] = layer;
+          }
+        }
+        result.views.push(detail);
+      }
+    } catch (error) {
+      result.error = errorText(error);
+    }
+    result.providerQueriesAfterDiagnostic = providerQuerySnapshot();
+    return result;
+  }
+
   async function exportDiagnostics(extension, graphCalendarId, start = "", end = "") {
     await waitForCalendarStartup();
     ensureProviderRegistered(extension);
@@ -3011,7 +3409,7 @@ function _m365NativeCreateProviderRuntime() {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.36//EN",
+      "PRODID:-//3-5 Power Electronics GmbH//M365 Calendar Diagnostics V2.48//EN",
       "CALSCALE:GREGORIAN",
       `X-WR-CALNAME:${safeString(calendar?.name || "Microsoft 365").replace(/[\\;,\r\n]/g, " ")}`,
       ...eventBlocks,
@@ -3037,6 +3435,8 @@ function _m365NativeCreateProviderRuntime() {
       )
     };
 
+    const currentViewDiagnostics = await collectCurrentViewDiagnostics(extension, wanted);
+
     return {
       generatedAt: new Date().toISOString(),
       calendar: calendarDescriptor(calendar),
@@ -3045,6 +3445,8 @@ function _m365NativeCreateProviderRuntime() {
       exportedItems: items.length,
       items,
       rangeQueries,
+      providerQueryStats: providerQuerySnapshot(),
+      currentViewDiagnostics,
       ics
     };
   }

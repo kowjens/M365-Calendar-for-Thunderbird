@@ -10,10 +10,11 @@ assert.ok(!updateSection.includes('setProperty("calendar-main-in-composite", des
 assert.ok(!updateSection.includes('setProperty("disabled", descriptor.enabled'), "existing calendar must preserve enabled state");
 assert.ok(api.includes('calendar.setProperty("calendar-main-in-composite", prefs && Object.prototype.hasOwnProperty.call(prefs, "visible")'), "new/recreated calendars should restore initial visibility");
 assert.ok(api.includes('calendar.setProperty("disabled", prefs && Object.prototype.hasOwnProperty.call(prefs, "disabled")'), "new/recreated calendars should restore enabled state");
-console.log("native visibility preservation V2.22: OK");
+console.log("native visibility preservation V2.46: OK");
 
 assert.ok(api.includes('name === "calendar-main-in-composite"'), "visibility observer must watch Thunderbird composite membership");
 assert.ok(api.includes('scheduleCalendarViewReload(value ? "visibility:show" : "visibility:hide")'), "show/hide must schedule a view reload");
-assert.ok(api.includes('view.goToDay();'), "view reload must use Thunderbird no-navigation goToDay refresh path");
+assert.ok(api.includes('view.refreshItems(true)'), "view reload should prefer Thunderbird item-level force refresh");
+assert.ok(api.includes('goToDay(legacy-fallback)'), "legacy fallback should remain explicit");
 assert.ok(api.includes('cal.manager.addCalendarObserver(nativeVisibilityObserver)'), "calendar observer must be registered");
-console.log("native visibility auto-reload V2.22: OK");
+console.log("native visibility auto-reload V2.46: OK");

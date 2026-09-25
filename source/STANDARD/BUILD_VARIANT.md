@@ -1,6 +1,6 @@
 # Build Variant
 
-- Version: 2.0.44 / V2.44
+- Version: 2.0.48 / V2.48
 - Distribution: GITHUB / ATN-compatible source
 - Mode: STANDARD
 - Native Thunderbird calendar provider: no

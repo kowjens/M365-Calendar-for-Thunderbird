@@ -8,7 +8,7 @@ For production and business use, **Thunderbird ESR is recommended**. This is esp
 | GITHUB STANDARD | No | none | GitHub |
 | GITHUB NATIVE | Yes (`nativeCalendar`) | none | GitHub |
 
-For the V2.44 ATN submission, the store artifact is **ATN STANDARD**. It intentionally contains no custom Experiment API and therefore does not provide the native Thunderbird Calendar provider. Microsoft 365 calendar functionality remains available through the add-on's Microsoft 365 Space and normal Graph-backed actions.
+For the V2.48 ATN submission, the store artifact is **ATN STANDARD**. It intentionally contains no custom Experiment API and therefore does not provide the native Thunderbird Calendar provider. Microsoft 365 calendar functionality remains available through the add-on's Microsoft 365 Space and normal Graph-backed actions.
 
 Users who need Microsoft 365 calendars directly inside Thunderbird's built-in Calendar view can install **GITHUB NATIVE** from the project releases. That edition provides deeper integration, but it is not submitted to ATN while new custom Experiment API submissions are paused.
 

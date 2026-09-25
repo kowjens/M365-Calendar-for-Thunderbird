@@ -16,9 +16,14 @@ Start here if you are installing or administering **M365 Calendar for Thunderbir
 - [Permissions](PERMISSIONS.md)
 - [Compatibility](COMPATIBILITY.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
+- [Distribution model](DISTRIBUTION.md)
+- [Release process](RELEASE_PROCESS.md)
 
 ## Releases
 
+- [V2.48](releases/V2.48.md)
+- [V2.47](releases/V2.47.md)
+- [V2.45](releases/V2.45.md)
 - [V2.44](releases/V2.44.md)
 - [V2.43](releases/V2.43.md)
 - [V2.42](releases/V2.42.md)

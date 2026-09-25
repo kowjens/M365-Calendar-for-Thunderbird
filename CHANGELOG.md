@@ -1,5 +1,39 @@
 # Changelog
 
+## V2.48 (2026-09-25)
+
+- Document the confirmed NATIVE Month/Multiweek host-UI limitation: in the reproduced Thunderbird 153.3.1 state, Graph, native cache, cached wrapper, underlying provider and DOM item instantiation all contain the affected events while Month/Multiweek can still omit them visually.
+- Keep the V2.47 deep provider/range/current-view diagnostics available for further upstream investigation.
+- Do **not** add another destructive or layout-manipulating workaround; Graph synchronization and native-cache mapping remain unchanged.
+- Add a public `docs/KNOWN_ISSUES.md` with precise scope, evidence, workarounds and related Thunderbird Bugzilla references.
+- Add a public-safe Bugzilla report package to the private complete release master; the raw private diagnostic is not published.
+- Extend the GitHub repository updater so direct upgrades remain supported from V2.43, V2.44, V2.45, V2.46 and V2.47 to V2.48.
+- STANDARD/ATN runtime behavior remains unchanged apart from the version increment.
+
+## V2.47 (2026-09-25)
+
+- NATIVE: add bounded logging of real Thunderbird provider `getItems()` range/filter requests, including a non-destructive mirror result list for bounded queries.
+- NATIVE: add current-view diagnostics for Month/Multiweek/Week/Day, including visible range and exact wrapper/storage occurrence queries.
+- NATIVE: add a best-effort rendered-item DOM scan to distinguish provider/range failures from Calendar frontend rendering failures.
+- Diagnostic ZIP now includes `native_current_view.json` and `native_provider_queries.json`.
+- GitHub updater explicitly accepts V2.43 through V2.46 as source repositories and still preserves `.git`, creates a backup and verifies all managed files.
+- STANDARD/ATN runtime behavior remains unchanged apart from the version increment.
+
+## V2.46 (2026-09-25)
+
+- NATIVE: replace the unconditional `currentView().goToDay()` refresh workaround with Thunderbird's item-level `refreshItems(true)` path when available, preserving the current Month/Multiweek date range and selection while forcing an item re-query.
+- NATIVE: retain a guarded `goToDay()` fallback for older Thunderbird versions that do not expose `refreshItems`.
+- NATIVE: add view-refresh diagnostics (view identity/type, visible date range, selected day, strategy and result) to make Month/Multiweek rendering failures distinguishable from Graph/cache synchronization failures.
+- Add V2.46 regression coverage for the safe-view-refresh contract.
+- STANDARD/ATN Graph and calendar runtime behavior is unchanged apart from the version increment.
+
+## V2.45
+
+- Keep V2.44 runtime behavior unchanged while hardening release engineering.
+- Generalize version/package checks and expand public/private leak detection.
+- Add deterministic public archive generation, one-command release audit and canonical publishing text.
+- Add robust repository update/recovery packaging and independent final-auditor workflow.
+
 ## V2.44 (2026-09-24)
 
 - Changed the addons.thunderbird.net submission from the custom-Experiment NATIVE edition to the Experiment-free STANDARD edition.

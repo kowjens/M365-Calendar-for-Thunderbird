@@ -1,6 +1,6 @@
 "use strict";
 
-const VERSION = "2.0.44";
+const VERSION = "2.0.48";
 const CONFIG_SCHEMA_VERSION = 207;
 const SYNC_STORE_KEY = "syncCacheV205";
 const CALENDAR_CACHE_KEY = "calendarCacheV120";
@@ -2111,7 +2111,7 @@ function diagnosticSyncWindows(store, calendarId, start, end) {
 function diagnosticSummaryText(payload) {
   const s = payload?.comparison?.summary || {};
   const lines = [
-    `M365 Calendar Diagnostics V2.32`,
+    `M365 Calendar Diagnostics V2.48`,
     `generatedAt=${payload?.metadata?.generatedAt || ""}`,
     `calendar=${payload?.metadata?.calendarName || ""}`,
     `graphCalendarId=${payload?.metadata?.calendarId || ""}`,
@@ -2123,6 +2123,11 @@ function diagnosticSummaryText(payload) {
     `missingNative=${Number(s.missingNative || 0)}`,
     `nativeOnly=${Number(s.nativeOnly || 0)}`,
     `seriesWithMissingInstances=${Number(s.seriesWithMissingInstances || 0)}`,
+    `currentViewType=${payload?.nativeSnapshot?.currentViewDiagnostics?.views?.[0]?.type || ""}`,
+    `currentViewRendered=${Number(payload?.nativeSnapshot?.currentViewDiagnostics?.views?.[0]?.rendered?.count || 0)}`,
+    `currentViewWrapperOccurrences=${Number(payload?.nativeSnapshot?.currentViewDiagnostics?.views?.[0]?.queries?.eventOccurrences?.cachedWrapper?.count || 0)}`,
+    `currentViewStorageOccurrences=${Number(payload?.nativeSnapshot?.currentViewDiagnostics?.views?.[0]?.queries?.eventOccurrences?.offlineStorage?.count || 0)}`,
+    `providerGetItemsCalls=${Number(payload?.nativeSnapshot?.providerQueryStats?.total || 0)}`,
     "",
     "Missing native events:"
   ];
@@ -2428,7 +2433,7 @@ function externalImipPersonalPayload(item, invitation, responseAction) {
   const uid = String(invitation?.uid || item?.iCalUId || item?.nativeUid || "");
   const responseLabel = responseAction === "tentativelyAccept" ? "tentative" : responseAction;
   const note = [
-    "[M365 Calendar for Thunderbird] External iMIP invitation fallback.",
+    "[M365 Calendar] External iMIP invitation fallback.",
     organizer ? `Original organizer: ${organizer}` : "",
     uid ? `Original iCalendar UID: ${uid}` : "",
     responseLabel ? `Local response: ${responseLabel}` : "",

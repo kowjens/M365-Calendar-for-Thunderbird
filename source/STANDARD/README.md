@@ -1,8 +1,8 @@
-# M365 Calendar for Thunderbird V2.44 – GITHUB_STANDARD
+# M365 Calendar for Thunderbird V2.48 – GITHUB_STANDARD
 
 Public STANDARD edition for Thunderbird.
 
-- Version: **2.0.44 / V2.44**
+- Version: **2.0.48 / V2.48**
 - Distribution: **GitHub**
 - Add-on ID: `m365-calendar-standard@3-5pe.com`
 - Native Thunderbird Calendar provider: **no**
@@ -15,3 +15,6 @@ The STANDARD edition is also the code base used for the ATN submission. The ATN 
 For deeper integration into Thunderbird's built-in Calendar view, use the **GITHUB_NATIVE** edition from the project releases.
 
 See the repository-level `README.md` and `docs/` directory.
+
+
+Build this edition from the repository root with `python tools/build_xpi.py --all`.
