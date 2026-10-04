@@ -591,17 +591,25 @@ function localDateKey(date) {
   return `${y}-${m}-${d}`;
 }
 
-function parseGraphDate(value) {
+function parseGraphDate(value, timeZone = "") {
   if (!value) return null;
-  return new Date(value);
+  const raw = String(value).trim();
+  // Graph returns dateTime without an offset. Events fetched through the
+  // native path (getEvent) are requested with outlook.timezone="UTC" and must
+  // not be read as local wall-clock time, or the editor shifts them by the
+  // local UTC offset.
+  if (String(timeZone).trim().toUpperCase() === "UTC" && !/Z$|[+-]\d{2}:?\d{2}$/i.test(raw)) {
+    return new Date(`${raw}Z`);
+  }
+  return new Date(raw);
 }
 
 function eventStart(event) {
-  return parseGraphDate(event?.start?.dateTime);
+  return parseGraphDate(event?.start?.dateTime, event?.start?.timeZone);
 }
 
 function eventEnd(event) {
-  return parseGraphDate(event?.end?.dateTime);
+  return parseGraphDate(event?.end?.dateTime, event?.end?.timeZone);
 }
 
 function sameDay(a, b) {
