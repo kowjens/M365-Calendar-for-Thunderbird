@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import re
 import sys
+from build_xpi import INCLUDE, iter_files
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -68,8 +69,9 @@ for variant, src in (("STANDARD", standard), ("NATIVE", native)):
     config = (src / "config" / "build-config.js").read_text(encoding="utf-8")
     if not re.search(r'clientId:\s*""', config) or not re.search(r'tenant:\s*""', config):
         err(f"{variant}: public OAuth defaults must be empty")
-    for path in src.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in {".js", ".html", ".json", ".css"}:
+    packaged_items = INCLUDE + (["experiments"] if variant == "NATIVE" else [])
+    for path in iter_files(src, packaged_items):
+        if path.suffix.lower() not in {".js", ".html", ".json", ".css"}:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
         if re.search(r"\beval\s*\(|new\s+Function\s*\(", text):
